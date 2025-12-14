@@ -6,9 +6,10 @@ import {IPyth, Price} from "./interfaces/IPyth.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-contract StableCoinReactor is ReentrancyGuard {
+contract StableCoinReactor is ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
@@ -148,6 +149,14 @@ contract StableCoinReactor is ReentrancyGuard {
         emit BetaParamsSet(phi0, phi1, decayPerSecondWadParam);
     }
 
+    function pause() external onlyTreasury {
+        _pause();
+    }
+
+    function unpause() external onlyTreasury {
+        _unpause();
+    }
+
     function reserve() public view returns (uint256) {
         return BASE_TOKEN.balanceOf(address(this));
     }
@@ -199,7 +208,7 @@ contract StableCoinReactor is ReentrancyGuard {
         );
     }
 
-    function updatePriceFeeds(bytes[] calldata updateData) external payable {       // Price feed update passthrough 
+    function updatePriceFeeds(bytes[] calldata updateData) external payable whenNotPaused {       // Price feed update passthrough 
         uint256 fee = PYTH_ORACLE.getUpdateFee(updateData);
         require(msg.value >= fee, "fee");
         PYTH_ORACLE.updatePriceFeeds{value: fee}(updateData);
@@ -213,7 +222,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 amountIn,
         address to,
         bytes[] calldata updateData
-    ) external payable nonReentrant {
+    ) external payable nonReentrant whenNotPaused {
         require(amountIn > 0, "amount=0");
 
         uint256 reserveBefore = reserve();
@@ -262,7 +271,7 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
 
-    function fusion(uint256 m, address to) external nonReentrant {
+    function fusion(uint256 m, address to) external nonReentrant whenNotPaused {
         require(m > 0, "amount=0");
         uint256 reserveBalance = reserve();
         require(reserveBalance > 0, "R=0");
@@ -346,7 +355,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonIn,
         address to,
         bytes[] calldata updateData
-    ) external payable nonReentrant returns (uint256 neutronOut, uint256 feeWad) {
+    ) external payable nonReentrant whenNotPaused returns (uint256 neutronOut, uint256 feeWad) {
         require(protonIn > 0, "amount=0");
         uint256 reserveTokens = reserve();
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
