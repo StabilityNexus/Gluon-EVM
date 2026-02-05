@@ -6,6 +6,7 @@ import {IGluonOracle} from "../interfaces/IGluonOracle.sol";
 interface IOrbPriceFeed {
     function getPrice() external view returns (uint256);
     function decimals() external view returns (uint8);
+    function updatedAt() external view returns (uint256);
 }
 
 contract GluonOrbAdapter is IGluonOracle {
@@ -28,6 +29,10 @@ contract GluonOrbAdapter is IGluonOracle {
     function getPrice() external view override returns (uint256) {
         uint256 price = orbFeed.getPrice();
         require(price > 0, "Orb: price <= 0");
+        
+        uint256 updatedAt = orbFeed.updatedAt();
+        require(block.timestamp - updatedAt <= maxAge, "Orb: Stale price");
+        
         return price * scalingFactor;
     }
 
@@ -35,7 +40,6 @@ contract GluonOrbAdapter is IGluonOracle {
         return 0;
     }
 
-    // Fixed: Renamed to updatePriceFeeds to match Interface
     function updatePriceFeeds(bytes[] calldata) external payable override {
         // No-op for Orb
     }
