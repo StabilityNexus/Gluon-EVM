@@ -35,7 +35,8 @@ contract GluonPythAdapter is IGluonOracle {
         pyth.updatePriceFeeds{value: fee}(updateData);
         
         if (msg.value > fee) {
-            payable(msg.sender).transfer(msg.value - fee);
+            (bool success, ) = msg.sender.call{value: msg.value - fee}("");
+            require(success, "refund failed");
         }
     }
 
