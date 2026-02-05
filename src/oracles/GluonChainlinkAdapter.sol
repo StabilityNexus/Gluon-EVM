@@ -40,6 +40,6 @@ contract GluonChainlinkAdapter is IGluonOracle {
     }
 
     function updatePriceFeeds(bytes[] calldata) external payable override {
-        // No-op for Chainlink
+        require(msg.value == 0, "Chainlink: no payment required");
     }
 }
