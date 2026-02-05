@@ -18,10 +18,12 @@ contract GluonChainlinkAdapter is IGluonOracle {
         maxAge = _maxAge;
         uint8 decimals = dataFeed.decimals();
         
-        if (decimals < 18) {
+        if (decimals <= 18) {
             scalingFactor = 10**(18 - decimals);
         } else {
-            scalingFactor = 1; 
+            // For feeds with > 18 decimals, we need to divide, not multiply
+            // Store decimals - 18 and handle in getPrice()
+            revert("Decimals > 18 not supported");
         }
     }
 
