@@ -8,13 +8,6 @@ struct Price {
     uint256 publishTime;
 }
 
-struct PriceData {
-    int64 price;
-    uint64 conf;
-    int32 expo;
-    uint256 publishTime;
-}
-
 interface IPyth {
     
     function getValidTimePeriod() external view returns (uint validTimePeriod);
