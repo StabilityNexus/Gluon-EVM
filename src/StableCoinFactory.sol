@@ -64,7 +64,7 @@ contract StableCoinFactory is Ownable {
         uint256 fissionFeeParam,
         uint256 fusionFeeParam,
         uint256 criticalReserveRatioWadParam
-    ) public returns (address) {
+    ) public onlyOwner returns (address) {
         require(bytes(vaultNameParam).length > 0, "Empty vault name");
         require(bytes(baseAssetNameParam).length > 0, "Empty base name");
         require(bytes(baseAssetSymbolParam).length > 0, "Empty base symbol");

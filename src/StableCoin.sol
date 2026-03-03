@@ -43,6 +43,7 @@ contract StableCoinReactor is ReentrancyGuard {
     uint256 public decayPerSecondWad;  
     int256  private decayedVolumeBase; 
     uint256 private lastDecayTs;       
+    uint256 private internalReserve;
 
     event Fission(
         address indexed from,
@@ -141,7 +142,8 @@ contract StableCoinReactor is ReentrancyGuard {
 
     function setBetaParams(uint256 phi0, uint256 phi1, uint256 decayPerSecondWadParam) external onlyTreasury {
         require(phi0 <= WAD && phi1 <= WAD, "phi > 1");
-        require(decayPerSecondWadParam <= WAD, "decay > 1");
+        require(decayPerSecondWadParam > 0 && decayPerSecondWadParam <= WAD, "decay out of range");
+        _decayLedger();
         betaPhi0 = phi0;
         betaPhi1 = phi1;
         decayPerSecondWad = decayPerSecondWadParam;
@@ -149,7 +151,7 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     function reserve() public view returns (uint256) {
-        return BASE_TOKEN.balanceOf(address(this));
+        return internalReserve;
     }
 
     /// @dev Base/PeggedAsset price (WAD). Uses "unsafe" read; call updatePriceFeeds externally when needed.
@@ -205,14 +207,16 @@ contract StableCoinReactor is ReentrancyGuard {
         PYTH_ORACLE.updatePriceFeeds{value: fee}(updateData);
         Price memory price = PYTH_ORACLE.getPriceUnsafe(PRICE_ID);
         emit PriceUpdated(PRICE_ID, price.price, price.publishTime);
-        if (msg.value > fee) payable(msg.sender).transfer(msg.value - fee);
+        _refundExcess(msg.value, fee);
     }
 
     /// @dev Implements the Solana fission logic including bootstrap case.
     function fission(
         uint256 amountIn,
         address to,
-        bytes[] calldata updateData
+        bytes[] calldata updateData,
+        uint256 minNeutronOut,
+        uint256 minProtonOut
     ) external payable nonReentrant {
         require(amountIn > 0, "amount=0");
 
@@ -227,13 +231,15 @@ contract StableCoinReactor is ReentrancyGuard {
             PYTH_ORACLE.updatePriceFeeds{value: pythFee}(updateData);
         }
 
+        uint256 balBefore = BASE_TOKEN.balanceOf(address(this));
         BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
+        uint256 actualReceived = BASE_TOKEN.balanceOf(address(this)) - balBefore;
 
-        uint256 feeAmount = Math.mulDiv(amountIn, FISSION_FEE, WAD);
+        uint256 feeAmount = Math.mulDiv(actualReceived, FISSION_FEE, WAD);
         if (feeAmount > 0) {
             BASE_TOKEN.safeTransfer(TREASURY, feeAmount);
         }
-        uint256 net = amountIn - feeAmount;
+        uint256 net = actualReceived - feeAmount;
         require(net > 0, "AmountTooSmall");
 
         uint256 neutronOut;
@@ -248,24 +254,24 @@ contract StableCoinReactor is ReentrancyGuard {
             protonOut = protonSupplyBefore == 0 ? 0 : Math.mulDiv(net, protonSupplyBefore, reserveBefore);
         }
         require(neutronOut > 0 || protonOut > 0, "AmountTooSmall");
+        require(neutronOut >= minNeutronOut, "slippage: neutron");
+        require(protonOut >= minProtonOut, "slippage: proton");
 
         NEUTRON_TOKEN.mint(to, neutronOut);
         PROTON_TOKEN.mint(to, protonOut);
+        internalReserve += net;
 
-        uint256 excess = msg.value > pythFee ? (msg.value - pythFee) : 0;
-        if (excess > 0) {
-            (bool success, ) = msg.sender.call{value: excess}("");
-            require(success, "refund failed");
-        }
+        _refundExcess(msg.value, pythFee);
 
-        emit Fission(msg.sender, to, amountIn, neutronOut, protonOut, feeAmount);
+        emit Fission(msg.sender, to, actualReceived, neutronOut, protonOut, feeAmount);
     }
 
 
-    function fusion(uint256 m, address to) external nonReentrant {
+    function fusion(uint256 m, address to, uint256 maxNBurn, uint256 maxPBurn) external nonReentrant {
         require(m > 0, "amount=0");
         uint256 reserveBalance = reserve();
         require(reserveBalance > 0, "R=0");
+        require(m <= reserveBalance, "m > reserve");
 
         uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
         uint256 protonSupplyTotal = PROTON_TOKEN.totalSupply();
@@ -273,6 +279,9 @@ contract StableCoinReactor is ReentrancyGuard {
 
         uint256 nBurn = Math.mulDiv(m, neutronSupplyTotal, reserveBalance);
         uint256 pBurn = Math.mulDiv(m, protonSupplyTotal, reserveBalance);
+        require(nBurn > 0 && pBurn > 0, "AmountTooSmall");
+        require(nBurn <= maxNBurn, "slippage: neutron burn");
+        require(pBurn <= maxPBurn, "slippage: proton burn");
 
         NEUTRON_TOKEN.burn(msg.sender, nBurn);
         PROTON_TOKEN.burn(msg.sender, pBurn);
@@ -282,6 +291,7 @@ contract StableCoinReactor is ReentrancyGuard {
 
         BASE_TOKEN.safeTransfer(to, net);
         if (fee > 0) BASE_TOKEN.safeTransfer(TREASURY, fee);
+        internalReserve -= m;
 
         emit Fusion(msg.sender, to, nBurn, pBurn, net, fee);
     }
@@ -345,7 +355,8 @@ contract StableCoinReactor is ReentrancyGuard {
     function transmuteProtonToNeutron(
         uint256 protonIn,
         address to,
-        bytes[] calldata updateData
+        bytes[] calldata updateData,
+        uint256 minNeutronOut
     ) external payable nonReentrant returns (uint256 neutronOut, uint256 feeWad) {
         require(protonIn > 0, "amount=0");
         uint256 reserveTokens = reserve();
@@ -368,6 +379,7 @@ contract StableCoinReactor is ReentrancyGuard {
 
         // Pull/burn input
         PROTON_TOKEN.burn(msg.sender, protonIn);
+        require(PROTON_TOKEN.totalSupply() > 0, "cannot drain entire proton supply");
 
         // gross value in BASE (WAD scaling): protonIn * Pp_base / WAD
         uint256 grossBase = Math.mulDiv(protonIn, protonPriceBase, WAD);
@@ -377,16 +389,14 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 netBase = Math.mulDiv(grossBase, (WAD - feeWad), WAD);
 
         neutronOut = Math.mulDiv(netBase, WAD, neutronPriceBase);
+        require(neutronOut > 0, "AmountTooSmall");
+        require(neutronOut >= minNeutronOut, "slippage: neutron");
         NEUTRON_TOKEN.mint(to, neutronOut);
 
         // \bar V update: +grossBase
         decayedVolumeBase += _grossBaseToInt(grossBase);
 
-        uint256 excess = msg.value > pythFee ? (msg.value - pythFee) : 0;
-        if (excess > 0) {
-            (bool success, ) = msg.sender.call{value: excess}("");
-            require(success, "refund failed");
-        }
+        _refundExcess(msg.value, pythFee);
 
         emit TransmutePlus(msg.sender, to, protonIn, neutronOut, feeWad, decayedVolumeBase);
     }
@@ -401,7 +411,8 @@ contract StableCoinReactor is ReentrancyGuard {
     function transmuteNeutronToProton(
         uint256 neutronIn,
         address to,
-        bytes[] calldata updateData
+        bytes[] calldata updateData,
+        uint256 minProtonOut
     ) external payable nonReentrant returns (uint256 protonOut, uint256 feeWad) {
         require(neutronIn > 0, "amount=0");
 
@@ -423,6 +434,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 neutronPriceBase = _neutronPriceInBase(reserveTokens, neutronSupplyCached, basePrice); 
         require(protonPriceBase > 0 && neutronPriceBase > 0, "bad price");
         NEUTRON_TOKEN.burn(msg.sender, neutronIn);
+        require(NEUTRON_TOKEN.totalSupply() > 0, "cannot drain entire neutron supply");
         uint256 grossBase = Math.mulDiv(neutronIn, neutronPriceBase, WAD);
 
         _decayLedger();
@@ -430,14 +442,12 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 netBase = Math.mulDiv(grossBase, (WAD - feeWad), WAD);
 
         protonOut = Math.mulDiv(netBase, WAD, protonPriceBase);
+        require(protonOut > 0, "AmountTooSmall");
+        require(protonOut >= minProtonOut, "slippage: proton");
         PROTON_TOKEN.mint(to, protonOut);
         decayedVolumeBase -= _grossBaseToInt(grossBase);
 
-        uint256 excess = msg.value > pythFee ? (msg.value - pythFee) : 0;
-        if (excess > 0) {
-            (bool success, ) = msg.sender.call{value: excess}("");
-            require(success, "refund failed");
-        }
+        _refundExcess(msg.value, pythFee);
 
         emit TransmuteMinus(msg.sender, to, neutronIn, protonOut, feeWad, decayedVolumeBase);
     }
@@ -550,5 +560,13 @@ contract StableCoinReactor is ReentrancyGuard {
     function _grossBaseToInt(uint256 value) internal pure returns (int256) {
         require(value <= uint256(type(int256).max), "Math overflow");
         return int256(value);
+    }
+
+    /// @dev Refund any ETH paid in excess of what was consumed.
+    function _refundExcess(uint256 paid, uint256 used) internal {
+        if (paid > used) {
+            (bool success, ) = msg.sender.call{value: paid - used}("");
+            require(success, "refund failed");
+        }
     }
 }
