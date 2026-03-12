@@ -6,7 +6,6 @@ import {console} from "../lib/forge-std/src/console.sol";
 import {StableCoinFactory} from "../src/StableCoinFactory.sol";
 
 contract DeployStableCoinFactory is Script {
-    
     StableCoinFactory public factory;
     function setUp() public {}
 
