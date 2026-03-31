@@ -21,11 +21,7 @@ contract StableCoinFactory is Ownable {
         uint256 criticalReserveRatioWad
     );
 
-    event ReactorDeployedWithOracle(
-        address indexed reactor,
-        address indexed base,
-        bytes32 basePriceId
-    );
+    event ReactorDeployedWithOracle(address indexed reactor, address indexed base, bytes32 basePriceId);
 
     address[] public deployedReactors;
     mapping(address => address[]) public reactorsByBase;
@@ -116,11 +112,7 @@ contract StableCoinFactory is Ownable {
             criticalReserveRatioWadParam
         );
 
-        emit ReactorDeployedWithOracle(
-            reactorAddress,
-            baseTokenParam,
-            priceIdParam
-        );
+        emit ReactorDeployedWithOracle(reactorAddress, baseTokenParam, priceIdParam);
 
         return reactorAddress;
     }
