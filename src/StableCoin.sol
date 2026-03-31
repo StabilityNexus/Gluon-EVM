@@ -33,8 +33,6 @@ contract StableCoinReactor is ReentrancyGuard {
     bytes32 public PRICE_ID;
     address public TREASURY;
 
-    // PR : suggestion - make treasury, pyth_oracle upgradable via a timelocked setter, to allow for migration and oracle changes if needed.
-
     uint256 public immutable FISSION_FEE;
     uint256 public immutable FUSION_FEE;
     uint256 public immutable CRITICAL_RESERVE_RATIO;
@@ -173,9 +171,6 @@ contract StableCoinReactor is ReentrancyGuard {
 
         emit TreasuryUpdated(oldTreasury, newTreasury);
     }
-
-    // PR: suggestion - since its accounting this contact's balacnce , any attacker can donate tokens to this contract and thus
-    // stability or pegged mechanism exploited or token can get depaegged . so implemnt by using a state varible to account for only genuine trnasfers to this contract ..
 
     function reserve() public view returns (uint256) {
         return BASE_TOKEN.balanceOf(address(this));
