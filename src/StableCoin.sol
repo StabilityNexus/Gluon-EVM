@@ -42,7 +42,9 @@ contract StableCoinReactor is ReentrancyGuard {
     uint256 public betaPhi1;           
     uint256 public decayPerSecondWad;  
     int256  private decayedVolumeBase; 
-    uint256 private lastDecayTs;       
+    uint256 private lastDecayTs;  
+
+    uint256 internal accountedReserve;   
 
     event Fission(
         address indexed from,
@@ -149,7 +151,7 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     function reserve() public view returns (uint256) {
-        return BASE_TOKEN.balanceOf(address(this));
+           return accountedReserve;
     }
 
     /// @dev Base/PeggedAsset price (WAD). Uses "unsafe" read; call updatePriceFeeds externally when needed.
@@ -228,10 +230,12 @@ contract StableCoinReactor is ReentrancyGuard {
         }
 
         BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
+        accountedReserve += amountIn;
 
         uint256 feeAmount = Math.mulDiv(amountIn, FISSION_FEE, WAD);
         if (feeAmount > 0) {
             BASE_TOKEN.safeTransfer(TREASURY, feeAmount);
+            accountedReserve -= feeAmount;
         }
         uint256 net = amountIn - feeAmount;
         require(net > 0, "AmountTooSmall");
@@ -279,9 +283,14 @@ contract StableCoinReactor is ReentrancyGuard {
 
         uint256 fee = Math.mulDiv(m, FUSION_FEE, WAD);
         uint256 net = m - fee;
-
+        
+        accountedReserve -= net;
         BASE_TOKEN.safeTransfer(to, net);
-        if (fee > 0) BASE_TOKEN.safeTransfer(TREASURY, fee);
+
+        if (fee > 0){
+         BASE_TOKEN.safeTransfer(TREASURY, fee);
+         accountedReserve -= fee;
+        }
 
         emit Fusion(msg.sender, to, nBurn, pBurn, net, fee);
     }
