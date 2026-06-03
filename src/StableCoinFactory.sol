@@ -16,15 +16,10 @@ contract StableCoinFactory is Ownable {
         string peggedAssetSymbol,
         string protonName,
         string protonSymbol,
+        address oracleAddress,
         uint256 fissionFee,
         uint256 fusionFee,
         uint256 criticalReserveRatioWad
-    );
-
-    event ReactorDeployedWithOracle(
-        address indexed reactor,
-        address indexed base,
-        bytes32 basePriceId
     );
 
     address[] public deployedReactors;
@@ -34,20 +29,7 @@ contract StableCoinFactory is Ownable {
 
     /**
      * Deploy a new Reactor
-     * @param vaultNameParam   vault label
-     * @param baseAssetNameParam display name for the base asset
-     * @param baseAssetSymbolParam symbol for the base asset
-     * @param peggedAssetNameParam name for the pegged (neutron) token
-     * @param peggedAssetSymbolParam symbol for the pegged token
-     * @param baseTokenParam   ERC20 reserve
-     * @param pythOracleParam  Pyth contract
-     * @param priceIdParam     Pyth feed for BASE/USD (or Peg)
-     * @param protonNameParam  name of the proton token
-     * @param protonSymbolParam symbol of the proton token
-     * @param treasuryParam    fees / governance
-     * @param fissionFeeParam  WAD
-     * @param fusionFeeParam   WAD
-     * @param criticalReserveRatioWadParam minimum reserve ratio (>=1e18)
+     * @param oracleParam      Address of the compliant IGluonOracle adapter
      */
     function deployReactor(
         string memory vaultNameParam,
@@ -56,8 +38,7 @@ contract StableCoinFactory is Ownable {
         string memory peggedAssetNameParam,
         string memory peggedAssetSymbolParam,
         address baseTokenParam,
-        address pythOracleParam,
-        bytes32 priceIdParam,
+        address oracleParam,  // Changed from pyth/priceId to generic oracleParam
         string memory protonNameParam,
         string memory protonSymbolParam,
         address treasuryParam,
@@ -73,7 +54,7 @@ contract StableCoinFactory is Ownable {
         require(bytes(protonNameParam).length > 0, "Empty proton name");
         require(bytes(protonSymbolParam).length > 0, "Empty proton symbol");
         require(baseTokenParam != address(0), "Invalid base");
-        require(pythOracleParam != address(0), "Invalid Pyth");
+        require(oracleParam != address(0), "Invalid oracle");
         require(treasuryParam != address(0), "Invalid treasury");
         require(fissionFeeParam < 1e18, "fissionFee >= 100%");
         require(fusionFeeParam < 1e18, "fusionFee >= 100%");
@@ -86,8 +67,7 @@ contract StableCoinFactory is Ownable {
             peggedAssetNameParam,
             peggedAssetSymbolParam,
             baseTokenParam,
-            pythOracleParam,
-            priceIdParam,
+            oracleParam, // Pass the adapter address
             protonNameParam,
             protonSymbolParam,
             treasuryParam,
@@ -111,15 +91,10 @@ contract StableCoinFactory is Ownable {
             peggedAssetSymbolParam,
             protonNameParam,
             protonSymbolParam,
+            oracleParam,
             fissionFeeParam,
             fusionFeeParam,
             criticalReserveRatioWadParam
-        );
-
-        emit ReactorDeployedWithOracle(
-            reactorAddress,
-            baseTokenParam,
-            priceIdParam
         );
 
         return reactorAddress;

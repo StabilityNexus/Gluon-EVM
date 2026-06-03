@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Tokeon} from "./tokens/Tokeon.sol";
-import {IPyth, Price} from "./interfaces/IPyth.sol";
+import {IGluonOracle} from "./interfaces/IGluonOracle.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -15,8 +15,7 @@ contract StableCoinReactor is ReentrancyGuard {
     uint256 public constant WAD = 1e18;
     uint256 public constant PEGGED_ASSET_WAD = 1e18; // peg target
     uint256 public constant MAXIMUM_AGE = 60; // oracle max staleness in seconds
-    uint32 private constant MAX_PRICE_EXP = 38;
-    
+
     // Tokens
     Tokeon public immutable NEUTRON_TOKEN;   // stable token (peg)
     Tokeon public immutable PROTON_TOKEN;    // volatile token
@@ -29,9 +28,9 @@ contract StableCoinReactor is ReentrancyGuard {
     string public peggedAssetName;
     string public peggedAssetSymbol;
 
-    IPyth   public immutable PYTH_ORACLE;     
-    bytes32 public immutable PRICE_ID;  
-
+    // Oracle (Adapter)
+    IGluonOracle public immutable ORACLE;     
+    
     address public immutable TREASURY;
     uint256 public immutable FISSION_FEE; 
     uint256 public immutable FUSION_FEE;  
@@ -44,40 +43,12 @@ contract StableCoinReactor is ReentrancyGuard {
     int256  private decayedVolumeBase; 
     uint256 private lastDecayTs;       
 
-    event Fission(
-        address indexed from,
-        address indexed to,
-        uint256 baseIn,
-        uint256 neutronOut,
-        uint256 protonOut,
-        uint256 feeToTreasury
-    );
-    event Fusion(
-        address indexed from,
-        address indexed to,
-        uint256 neutronBurn,
-        uint256 protonBurn,
-        uint256 baseOut,
-        uint256 feeToTreasury
-    );
-    event PriceUpdated(bytes32 indexed priceId, int64 price, uint256 timestamp);
-    event TransmutePlus(   // β+
-        address indexed from,
-        address indexed to,
-        uint256 protonIn,
-        uint256 neutronOut,
-        uint256 feeWad,
-        int256  newDecayedVolumeBase
-    );
-    event TransmuteMinus(  // β-
-        address indexed from,
-        address indexed to,
-        uint256 neutronIn,
-        uint256 protonOut,
-        uint256 feeWad,
-        int256  newDecayedVolumeBase
-    );
+    event Fission(address indexed from, address indexed to, uint256 baseIn, uint256 neutronOut, uint256 protonOut, uint256 feeToTreasury);
+    event Fusion(address indexed from, address indexed to, uint256 neutronBurn, uint256 protonBurn, uint256 baseOut, uint256 feeToTreasury);
+    event TransmutePlus(address indexed from, address indexed to, uint256 protonIn, uint256 neutronOut, uint256 feeWad, int256 newDecayedVolumeBase);
+    event TransmuteMinus(address indexed from, address indexed to, uint256 neutronIn, uint256 protonOut, uint256 feeWad, int256 newDecayedVolumeBase);
     event BetaParamsSet(uint256 phi0, uint256 phi1, uint256 decayPerSecondWad);
+    event OraclePriceUpdate(uint256 feePaid);
 
     constructor(
         string memory vaultNameParam,
@@ -86,8 +57,7 @@ contract StableCoinReactor is ReentrancyGuard {
         string memory peggedAssetNameParam,
         string memory peggedAssetSymbolParam,
         address baseTokenParam,
-        address pythOracleParam,
-        bytes32 priceIdParam,           
+        address oracleParam, // Replaced specific Pyth params with generic Oracle address
         string memory protonNameParam, 
         string memory protonSymbolParam,
         address treasuryParam, 
@@ -96,7 +66,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 criticalReserveRatioWadParam
     ) {
         require(baseTokenParam != address(0), "Invalid base token");
-        require(pythOracleParam != address(0), "Invalid Pyth");
+        require(oracleParam != address(0), "Invalid Oracle");
         require(treasuryParam != address(0), "Invalid treasury");
         require(fissionFeeParam < WAD, "fission fee >= 100%");
         require(fusionFeeParam < WAD, "fusion fee >= 100%");
@@ -116,8 +86,7 @@ contract StableCoinReactor is ReentrancyGuard {
         peggedAssetSymbol = peggedAssetSymbolParam;
 
         BASE_TOKEN = IERC20(baseTokenParam);
-        PYTH_ORACLE = IPyth(pythOracleParam);
-        PRICE_ID = priceIdParam;
+        ORACLE = IGluonOracle(oracleParam);
         CRITICAL_RESERVE_RATIO = criticalReserveRatioWadParam;
 
         NEUTRON_TOKEN = new Tokeon(peggedAssetNameParam, peggedAssetSymbolParam, address(this));
@@ -152,24 +121,22 @@ contract StableCoinReactor is ReentrancyGuard {
         return BASE_TOKEN.balanceOf(address(this));
     }
 
-    /// @dev Base/PeggedAsset price (WAD). Uses "unsafe" read; call updatePriceFeeds externally when needed.
+    /// @dev Base/PeggedAsset price (WAD). 
+    /// Delegates to the Oracle Adapter.
     function getBasePriceInPeggedAsset() public view returns (uint256) {
-        Price memory p = PYTH_ORACLE.getPriceUnsafe(PRICE_ID);
-        return _pythPriceToWad(p);
+        return ORACLE.getPrice();
     }
 
-    /// @dev Dynamic q as defined in the Solana reference. Returns WAD in [0,1].
     function qWad() public view returns (uint256) {
         uint256 basePrice = getBasePriceInPeggedAsset();
         return _qWadDynamic(reserve(), NEUTRON_TOKEN.totalSupply(), basePrice);
     }
 
-    /// @dev Price of NEUTRON_TOKEN in BASE units (WAD): P° = q * R / S_n
     function neutronPriceInBase() public view returns (uint256) {
         uint256 basePrice = getBasePriceInPeggedAsset();
         return _neutronPriceInBase(reserve(), NEUTRON_TOKEN.totalSupply(), basePrice);
     }
-    /// @dev Price of PROTON_TOKEN in BASE units (WAD): P• = (1-q) * R / S_p
+
     function protonPriceInBase() public view returns (uint256) {
         uint256 basePrice = getBasePriceInPeggedAsset();
         return _protonPriceInBase(reserve(), PROTON_TOKEN.totalSupply(), NEUTRON_TOKEN.totalSupply(), basePrice);
@@ -180,13 +147,13 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 neutronBase = _neutronPriceInBase(reserve(), NEUTRON_TOKEN.totalSupply(), basePrice);
         return Math.mulDiv(neutronBase, basePrice, WAD);
     }
+    
     function protonPriceInPeggedAsset() external view returns (uint256) {
         uint256 basePrice = getBasePriceInPeggedAsset();
         uint256 protonBase = _protonPriceInBase(reserve(), PROTON_TOKEN.totalSupply(), NEUTRON_TOKEN.totalSupply(), basePrice);
         return Math.mulDiv(protonBase, basePrice, WAD);
     }
 
-    /// @dev Convenience: current reserve ratio vs peg (PeggedAsset): r = (R*Pbase)/(S_n*PEG)
     function reserveRatioPeggedAsset() public view returns (uint256) {
         uint256 reserveBalance = reserve();
         uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
@@ -199,36 +166,33 @@ contract StableCoinReactor is ReentrancyGuard {
         );
     }
 
-    function updatePriceFeeds(bytes[] calldata updateData) external payable {       // Price feed update passthrough 
-        uint256 fee = PYTH_ORACLE.getUpdateFee(updateData);
+    function updatePriceFeeds(bytes[] calldata updateData) external payable {
+        // Delegates to adapter. If Chainlink/Orb, this is a no-op/cheap call.
+        uint256 fee = ORACLE.getUpdateFee(updateData);
         require(msg.value >= fee, "fee");
-        PYTH_ORACLE.updatePriceFeeds{value: fee}(updateData);
-        Price memory price = PYTH_ORACLE.getPriceUnsafe(PRICE_ID);
-        emit PriceUpdated(PRICE_ID, price.price, price.publishTime);
+        ORACLE.updatePriceFeeds{value: fee}(updateData);
+        emit OraclePriceUpdate(fee);
         if (msg.value > fee) payable(msg.sender).transfer(msg.value - fee);
     }
 
-    /// @dev Implements the Solana fission logic including bootstrap case.
     function fission(
         uint256 amountIn,
         address to,
         bytes[] calldata updateData
     ) external payable nonReentrant {
         require(amountIn > 0, "amount=0");
-
         uint256 reserveBefore = reserve();
         uint256 neutronSupplyBefore = NEUTRON_TOKEN.totalSupply();
         uint256 protonSupplyBefore = PROTON_TOKEN.totalSupply();
 
-        uint256 pythFee = 0;
+        uint256 oracleFee = 0;
         if (updateData.length > 0) {
-            pythFee = PYTH_ORACLE.getUpdateFee(updateData);
-            require(msg.value >= pythFee, "insufficient oracle fee");
-            PYTH_ORACLE.updatePriceFeeds{value: pythFee}(updateData);
+            oracleFee = ORACLE.getUpdateFee(updateData);
+            require(msg.value >= oracleFee, "insufficient oracle fee");
+            ORACLE.updatePriceFeeds{value: oracleFee}(updateData);
         }
 
         BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
-
         uint256 feeAmount = Math.mulDiv(amountIn, FISSION_FEE, WAD);
         if (feeAmount > 0) {
             BASE_TOKEN.safeTransfer(TREASURY, feeAmount);
@@ -239,8 +203,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 neutronOut;
         uint256 protonOut;
         if (reserveBefore == 0 && neutronSupplyBefore == 0 && protonSupplyBefore == 0) {
-            Price memory price = PYTH_ORACLE.getPriceNoOlderThan(PRICE_ID, MAXIMUM_AGE);
-            uint256 basePriceWad = _pythPriceToWad(price);
+            uint256 basePriceWad = getBasePriceInPeggedAsset();
             (neutronOut, protonOut) = _bootstrapFissionOutputs(net, basePriceWad);
         } else {
             require(reserveBefore > 0, "R=0");
@@ -248,11 +211,10 @@ contract StableCoinReactor is ReentrancyGuard {
             protonOut = protonSupplyBefore == 0 ? 0 : Math.mulDiv(net, protonSupplyBefore, reserveBefore);
         }
         require(neutronOut > 0 || protonOut > 0, "AmountTooSmall");
-
         NEUTRON_TOKEN.mint(to, neutronOut);
         PROTON_TOKEN.mint(to, protonOut);
 
-        uint256 excess = msg.value > pythFee ? (msg.value - pythFee) : 0;
+        uint256 excess = msg.value > oracleFee ? (msg.value - oracleFee) : 0;
         if (excess > 0) {
             (bool success, ) = msg.sender.call{value: excess}("");
             require(success, "refund failed");
@@ -260,7 +222,6 @@ contract StableCoinReactor is ReentrancyGuard {
 
         emit Fission(msg.sender, to, amountIn, neutronOut, protonOut, feeAmount);
     }
-
 
     function fusion(uint256 m, address to) external nonReentrant {
         require(m > 0, "amount=0");
@@ -282,7 +243,6 @@ contract StableCoinReactor is ReentrancyGuard {
 
         BASE_TOKEN.safeTransfer(to, net);
         if (fee > 0) BASE_TOKEN.safeTransfer(TREASURY, fee);
-
         emit Fusion(msg.sender, to, nBurn, pBurn, net, fee);
     }
 
@@ -302,8 +262,7 @@ contract StableCoinReactor is ReentrancyGuard {
             lastDecayTs = t;
             return;
         }
-        uint256 d = _rpow(decayPerSecondWad, dt); // δ^{dt} (WAD)
-        // decayedVolumeBase <- \bar V * δ^{dt}
+        uint256 d = _rpow(decayPerSecondWad, dt);
         if (decayedVolumeBase != 0) {
             int256 v = decayedVolumeBase;
             if (v > 0) {
@@ -316,7 +275,7 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     function _betaPlusFeeWad(uint256 reserveTokens) internal view returns (uint256) {
-        if (reserveTokens == 0) return WAD; // saturated 
+        if (reserveTokens == 0) return WAD;
         if (betaPhi0 == 0 && betaPhi1 == 0) return 0;
         int256 v = decayedVolumeBase;
         uint256 pos = v > 0 ? uint256(v) : 0;
@@ -335,13 +294,6 @@ contract StableCoinReactor is ReentrancyGuard {
         return f > WAD ? WAD : f;
     }
 
-    /**
-     * β+ : convert PROTON_TOKEN -> NEUTRON_TOKEN
-     * - Value path (in BASE): gross = protonIn * P•_base
-     * - Apply fee φβ+ on output value
-     * - neutronOut = (gross * (1-φ)) / P°_base
-     * - Update \bar V += +gross (decayed ledger)
-     */
     function transmuteProtonToNeutron(
         uint256 protonIn,
         address to,
@@ -352,37 +304,30 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
-        uint256 pythFee = 0;
+        uint256 oracleFee = 0;
         if (updateData.length > 0) {
-            pythFee = PYTH_ORACLE.getUpdateFee(updateData);
-            require(msg.value >= pythFee, "insufficient oracle fee");
-            PYTH_ORACLE.updatePriceFeeds{value: pythFee}(updateData);
+            oracleFee = ORACLE.getUpdateFee(updateData);
+            require(msg.value >= oracleFee, "insufficient oracle fee");
+            ORACLE.updatePriceFeeds{value: oracleFee}(updateData);
         }
 
-        Price memory price = PYTH_ORACLE.getPriceNoOlderThan(PRICE_ID, MAXIMUM_AGE);
-        uint256 basePrice = _pythPriceToWad(price);
+        uint256 basePrice = getBasePriceInPeggedAsset();
 
         uint256 protonPriceBase = _protonPriceInBase(reserveTokens, protonSupplyCached, neutronSupplyCached, basePrice); 
-        uint256 neutronPriceBase = _neutronPriceInBase(reserveTokens, neutronSupplyCached, basePrice); 
+        uint256 neutronPriceBase = _neutronPriceInBase(reserveTokens, neutronSupplyCached, basePrice);
         require(protonPriceBase > 0 && neutronPriceBase > 0, "bad price");
 
-        // Pull/burn input
         PROTON_TOKEN.burn(msg.sender, protonIn);
-
-        // gross value in BASE (WAD scaling): protonIn * Pp_base / WAD
         uint256 grossBase = Math.mulDiv(protonIn, protonPriceBase, WAD);
-
         _decayLedger();
         feeWad = _betaPlusFeeWad(reserveTokens);
         uint256 netBase = Math.mulDiv(grossBase, (WAD - feeWad), WAD);
 
         neutronOut = Math.mulDiv(netBase, WAD, neutronPriceBase);
         NEUTRON_TOKEN.mint(to, neutronOut);
-
-        // \bar V update: +grossBase
+        
         decayedVolumeBase += _grossBaseToInt(grossBase);
-
-        uint256 excess = msg.value > pythFee ? (msg.value - pythFee) : 0;
+        uint256 excess = msg.value > oracleFee ? (msg.value - oracleFee) : 0;
         if (excess > 0) {
             (bool success, ) = msg.sender.call{value: excess}("");
             require(success, "refund failed");
@@ -409,15 +354,14 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
-        uint256 pythFee = 0;
+        uint256 oracleFee = 0;
         if (updateData.length > 0) {
-            pythFee = PYTH_ORACLE.getUpdateFee(updateData);
-            require(msg.value >= pythFee, "insufficient oracle fee");
-            PYTH_ORACLE.updatePriceFeeds{value: pythFee}(updateData);
+            oracleFee = ORACLE.getUpdateFee(updateData);
+            require(msg.value >= oracleFee, "insufficient oracle fee");
+            ORACLE.updatePriceFeeds{value: oracleFee}(updateData);
         }
 
-        Price memory price = PYTH_ORACLE.getPriceNoOlderThan(PRICE_ID, MAXIMUM_AGE);
-        uint256 basePrice = _pythPriceToWad(price);
+        uint256 basePrice = getBasePriceInPeggedAsset();
 
         uint256 protonPriceBase = _protonPriceInBase(reserveTokens, protonSupplyCached, neutronSupplyCached, basePrice);  
         uint256 neutronPriceBase = _neutronPriceInBase(reserveTokens, neutronSupplyCached, basePrice); 
@@ -433,7 +377,7 @@ contract StableCoinReactor is ReentrancyGuard {
         PROTON_TOKEN.mint(to, protonOut);
         decayedVolumeBase -= _grossBaseToInt(grossBase);
 
-        uint256 excess = msg.value > pythFee ? (msg.value - pythFee) : 0;
+        uint256 excess = msg.value > oracleFee ? (msg.value - oracleFee) : 0; 
         if (excess > 0) {
             (bool success, ) = msg.sender.call{value: excess}("");
             require(success, "refund failed");
@@ -521,30 +465,6 @@ contract StableCoinReactor is ReentrancyGuard {
         if (rTilde == 0) return 0;
         uint256 q = Math.mulDiv(WAD, WAD, rTilde);
         return q > WAD ? WAD : q;
-    }
-
-    function _pythPriceToWad(Price memory price) internal pure returns (uint256) {
-        require(price.price > 0, "bad price");
-        uint256 unsignedPrice = uint256(uint64(price.price));
-        if (price.expo >= 0) {
-            uint32 exp = uint32(uint32(price.expo));
-            require(exp <= MAX_PRICE_EXP, "expo too large");
-            uint256 scale = _pow10(exp);
-            uint256 scaled = Math.mulDiv(unsignedPrice, scale, 1);
-            return Math.mulDiv(scaled, WAD, 1);
-        } else {
-            uint32 exp = uint32(uint32(-price.expo));
-            require(exp <= MAX_PRICE_EXP, "expo too large");
-            uint256 scale = _pow10(exp);
-            return Math.mulDiv(unsignedPrice, WAD, scale);
-        }
-    }
-
-    function _pow10(uint32 exp) internal pure returns (uint256 result) {
-        result = 1;
-        for (uint32 i = 0; i < exp; ++i) {
-            result *= 10;
-        }
     }
 
     function _grossBaseToInt(uint256 value) internal pure returns (int256) {
