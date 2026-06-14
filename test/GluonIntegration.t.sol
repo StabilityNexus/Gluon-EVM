@@ -4,7 +4,9 @@ pragma solidity ^0.8.20;
 import {Test, console} from "forge-std/Test.sol";
 import {StableCoinFactory} from "../src/StableCoinFactory.sol";
 import {StableCoinReactor} from "../src/StableCoin.sol";
-import {ChainlinkToOracleAdapter} from "../src/oracles/ChainlinkToOracleAdapter.sol";
+import {
+    ChainlinkToOracleAdapter
+} from "../src/oracles/ChainlinkToOracleAdapter.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockERC20 is ERC20 {
@@ -27,7 +29,11 @@ contract MockFeed {
         updatedAtVal = block.timestamp;
     }
 
-    function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
+    function latestRoundData()
+        external
+        view
+        returns (uint80, int256, uint256, uint256, uint80)
+    {
         return (0, price, 0, updatedAtVal, 0);
     }
 
@@ -85,9 +91,13 @@ contract GluonIntegrationTest is Test {
         reactor.fission(100 * 1e18, user);
 
         uint256 neutronBal = reactor.NEUTRON_TOKEN().balanceOf(user);
+        uint256 protonBal = reactor.PROTON_TOKEN().balanceOf(user);
 
         assertTrue(neutronBal > 0, "Neutron tokens not minted");
+        assertTrue(protonBal > 0, "Proton tokens not minted");
+
         console.log("Neutron Minted:", neutronBal);
+        console.log("Proton Minted:", protonBal);
 
         vm.stopPrank();
     }
