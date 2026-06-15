@@ -38,7 +38,7 @@ contract StableCoinFactory is Ownable {
         string memory peggedAssetNameParam,
         string memory peggedAssetSymbolParam,
         address baseTokenParam,
-        address oracleParam,  // Changed from pyth/priceId to generic oracleParam
+        address oracleParam, // Changed from pyth/priceId to generic oracleParam
         string memory protonNameParam,
         string memory protonSymbolParam,
         address treasuryParam,

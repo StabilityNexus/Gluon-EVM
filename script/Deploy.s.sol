@@ -25,7 +25,7 @@ contract DeployGluon is Script {
 
     function setUp() public {
         // Load env variables or set defaults for local testing
-        pythContractAddress = vm.envOr("PYTH_ADDRESS", address(0)); 
+        pythContractAddress = vm.envOr("PYTH_ADDRESS", address(0));
         pythPriceId = vm.envOr("PYTH_PRICE_ID", bytes32(0));
         chainlinkFeedAddress = vm.envOr("CHAINLINK_FEED", address(0));
         orbFeedAddress = vm.envOr("ORB_FEED", address(0));
@@ -59,7 +59,7 @@ contract DeployGluon is Script {
             console.log("Orb Adapter Deployed: ", address(orbAdapter));
         }
 
-        // Example: To deploy a Reactor, you would now call factory.deployReactor(...) 
+        // Example: To deploy a Reactor, you would now call factory.deployReactor(...)
         // passing address(pythAdapter), address(chainlinkAdapter), or address(orbAdapter) as the oracleParam.
 
         vm.stopBroadcast();

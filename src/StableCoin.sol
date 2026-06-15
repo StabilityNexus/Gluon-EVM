@@ -5,12 +5,8 @@ import {Tokeon} from "./tokens/Tokeon.sol";
 // import {IGluonOracle} from "./interfaces/IGluonOracle.sol"; replaced from IGluonOracle to IOracle
 import {IOracle} from "./interfaces/IOracle.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {
-    SafeERC20
-} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {
-    ReentrancyGuard
-} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract StableCoinReactor is ReentrancyGuard {
@@ -121,16 +117,8 @@ contract StableCoinReactor is ReentrancyGuard {
         ORACLE = IOracle(oracleParam);
         CRITICAL_RESERVE_RATIO = criticalReserveRatioWadParam;
 
-        NEUTRON_TOKEN = new Tokeon(
-            peggedAssetNameParam,
-            peggedAssetSymbolParam,
-            address(this)
-        );
-        PROTON_TOKEN = new Tokeon(
-            protonNameParam,
-            protonSymbolParam,
-            address(this)
-        );
+        NEUTRON_TOKEN = new Tokeon(peggedAssetNameParam, peggedAssetSymbolParam, address(this));
+        PROTON_TOKEN = new Tokeon(protonNameParam, protonSymbolParam, address(this));
 
         TREASURY = treasuryParam;
         FISSION_FEE = fissionFeeParam;
@@ -148,11 +136,7 @@ contract StableCoinReactor is ReentrancyGuard {
         _;
     }
 
-    function setBetaParams(
-        uint256 phi0,
-        uint256 phi1,
-        uint256 decayPerSecondWadParam
-    ) external onlyTreasury {
+    function setBetaParams(uint256 phi0, uint256 phi1, uint256 decayPerSecondWadParam) external onlyTreasury {
         require(phi0 <= WAD && phi1 <= WAD, "phi > 1");
         require(decayPerSecondWadParam <= WAD, "decay > 1");
         betaPhi0 = phi0;
@@ -178,43 +162,24 @@ contract StableCoinReactor is ReentrancyGuard {
 
     function neutronPriceInBase() public view returns (uint256) {
         uint256 basePrice = getBasePriceInPeggedAsset();
-        return
-            _neutronPriceInBase(
-                reserve(),
-                NEUTRON_TOKEN.totalSupply(),
-                basePrice
-            );
+        return _neutronPriceInBase(reserve(), NEUTRON_TOKEN.totalSupply(), basePrice);
     }
 
     function protonPriceInBase() public view returns (uint256) {
         uint256 basePrice = getBasePriceInPeggedAsset();
-        return
-            _protonPriceInBase(
-                reserve(),
-                PROTON_TOKEN.totalSupply(),
-                NEUTRON_TOKEN.totalSupply(),
-                basePrice
-            );
+        return _protonPriceInBase(reserve(), PROTON_TOKEN.totalSupply(), NEUTRON_TOKEN.totalSupply(), basePrice);
     }
 
     function neutronPriceInPeggedAsset() external view returns (uint256) {
         uint256 basePrice = getBasePriceInPeggedAsset();
-        uint256 neutronBase = _neutronPriceInBase(
-            reserve(),
-            NEUTRON_TOKEN.totalSupply(),
-            basePrice
-        );
+        uint256 neutronBase = _neutronPriceInBase(reserve(), NEUTRON_TOKEN.totalSupply(), basePrice);
         return Math.mulDiv(neutronBase, basePrice, WAD);
     }
 
     function protonPriceInPeggedAsset() external view returns (uint256) {
         uint256 basePrice = getBasePriceInPeggedAsset();
-        uint256 protonBase = _protonPriceInBase(
-            reserve(),
-            PROTON_TOKEN.totalSupply(),
-            NEUTRON_TOKEN.totalSupply(),
-            basePrice
-        );
+        uint256 protonBase =
+            _protonPriceInBase(reserve(), PROTON_TOKEN.totalSupply(), NEUTRON_TOKEN.totalSupply(), basePrice);
         return Math.mulDiv(protonBase, basePrice, WAD);
     }
 
@@ -223,12 +188,9 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
         if (reserveBalance == 0) return 0;
         if (neutronSupplyTotal == 0) return type(uint256).max;
-        return
-            Math.mulDiv(
-                reserveBalance,
-                getBasePriceInPeggedAsset(),
-                Math.mulDiv(neutronSupplyTotal, PEGGED_ASSET_WAD, WAD)
-            );
+        return Math.mulDiv(
+            reserveBalance, getBasePriceInPeggedAsset(), Math.mulDiv(neutronSupplyTotal, PEGGED_ASSET_WAD, WAD)
+        );
     }
 
     function fission(uint256 amountIn, address to) external nonReentrant {
@@ -247,37 +209,19 @@ contract StableCoinReactor is ReentrancyGuard {
 
         uint256 neutronOut;
         uint256 protonOut;
-        if (
-            reserveBefore == 0 &&
-            neutronSupplyBefore == 0 &&
-            protonSupplyBefore == 0
-        ) {
+        if (reserveBefore == 0 && neutronSupplyBefore == 0 && protonSupplyBefore == 0) {
             uint256 basePriceWad = getBasePriceInPeggedAsset();
-            (neutronOut, protonOut) = _bootstrapFissionOutputs(
-                net,
-                basePriceWad
-            );
+            (neutronOut, protonOut) = _bootstrapFissionOutputs(net, basePriceWad);
         } else {
             require(reserveBefore > 0, "R=0");
-            neutronOut = neutronSupplyBefore == 0
-                ? 0
-                : Math.mulDiv(net, neutronSupplyBefore, reserveBefore);
-            protonOut = protonSupplyBefore == 0
-                ? 0
-                : Math.mulDiv(net, protonSupplyBefore, reserveBefore);
+            neutronOut = neutronSupplyBefore == 0 ? 0 : Math.mulDiv(net, neutronSupplyBefore, reserveBefore);
+            protonOut = protonSupplyBefore == 0 ? 0 : Math.mulDiv(net, protonSupplyBefore, reserveBefore);
         }
         require(neutronOut > 0 || protonOut > 0, "AmountTooSmall");
         NEUTRON_TOKEN.mint(to, neutronOut);
         PROTON_TOKEN.mint(to, protonOut);
 
-        emit Fission(
-            msg.sender,
-            to,
-            amountIn,
-            neutronOut,
-            protonOut,
-            feeAmount
-        );
+        emit Fission(msg.sender, to, amountIn, neutronOut, protonOut, feeAmount);
     }
 
     function fusion(uint256 m, address to) external nonReentrant {
@@ -332,9 +276,7 @@ contract StableCoinReactor is ReentrancyGuard {
         lastDecayTs = t;
     }
 
-    function _betaPlusFeeWad(
-        uint256 reserveTokens
-    ) internal view returns (uint256) {
+    function _betaPlusFeeWad(uint256 reserveTokens) internal view returns (uint256) {
         if (reserveTokens == 0) return WAD;
         if (betaPhi0 == 0 && betaPhi1 == 0) return 0;
         int256 v = decayedVolumeBase;
@@ -344,9 +286,7 @@ contract StableCoinReactor is ReentrancyGuard {
         return f > WAD ? WAD : f;
     }
 
-    function _betaMinusFeeWad(
-        uint256 reserveTokens
-    ) internal view returns (uint256) {
+    function _betaMinusFeeWad(uint256 reserveTokens) internal view returns (uint256) {
         if (reserveTokens == 0) return WAD;
         if (betaPhi0 == 0 && betaPhi1 == 0) return 0;
         int256 v = decayedVolumeBase;
@@ -356,10 +296,11 @@ contract StableCoinReactor is ReentrancyGuard {
         return f > WAD ? WAD : f;
     }
 
-    function transmuteProtonToNeutron(
-        uint256 protonIn,
-        address to
-    ) external nonReentrant returns (uint256 neutronOut, uint256 feeWad) {
+    function transmuteProtonToNeutron(uint256 protonIn, address to)
+        external
+        nonReentrant
+        returns (uint256 neutronOut, uint256 feeWad)
+    {
         require(protonIn > 0, "amount=0");
         uint256 reserveTokens = reserve();
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
@@ -367,17 +308,8 @@ contract StableCoinReactor is ReentrancyGuard {
 
         uint256 basePrice = getBasePriceInPeggedAsset();
 
-        uint256 protonPriceBase = _protonPriceInBase(
-            reserveTokens,
-            protonSupplyCached,
-            neutronSupplyCached,
-            basePrice
-        );
-        uint256 neutronPriceBase = _neutronPriceInBase(
-            reserveTokens,
-            neutronSupplyCached,
-            basePrice
-        );
+        uint256 protonPriceBase = _protonPriceInBase(reserveTokens, protonSupplyCached, neutronSupplyCached, basePrice);
+        uint256 neutronPriceBase = _neutronPriceInBase(reserveTokens, neutronSupplyCached, basePrice);
         require(protonPriceBase > 0 && neutronPriceBase > 0, "bad price");
 
         PROTON_TOKEN.burn(msg.sender, protonIn);
@@ -391,24 +323,18 @@ contract StableCoinReactor is ReentrancyGuard {
 
         decayedVolumeBase += _grossBaseToInt(grossBase);
 
-        emit TransmutePlus(
-            msg.sender,
-            to,
-            protonIn,
-            neutronOut,
-            feeWad,
-            decayedVolumeBase
-        );
+        emit TransmutePlus(msg.sender, to, protonIn, neutronOut, feeWad, decayedVolumeBase);
     }
 
     /**
      * β- : convert NEUTRON_TOKEN -> PROTON_TOKEN
      */
 
-    function transmuteNeutronToProton(
-        uint256 neutronIn,
-        address to
-    ) external nonReentrant returns (uint256 protonOut, uint256 feeWad) {
+    function transmuteNeutronToProton(uint256 neutronIn, address to)
+        external
+        nonReentrant
+        returns (uint256 protonOut, uint256 feeWad)
+    {
         require(neutronIn > 0, "amount=0");
 
         uint256 reserveTokens = reserve();
@@ -417,17 +343,8 @@ contract StableCoinReactor is ReentrancyGuard {
 
         uint256 basePrice = getBasePriceInPeggedAsset();
 
-        uint256 protonPriceBase = _protonPriceInBase(
-            reserveTokens,
-            protonSupplyCached,
-            neutronSupplyCached,
-            basePrice
-        );
-        uint256 neutronPriceBase = _neutronPriceInBase(
-            reserveTokens,
-            neutronSupplyCached,
-            basePrice
-        );
+        uint256 protonPriceBase = _protonPriceInBase(reserveTokens, protonSupplyCached, neutronSupplyCached, basePrice);
+        uint256 neutronPriceBase = _neutronPriceInBase(reserveTokens, neutronSupplyCached, basePrice);
         require(protonPriceBase > 0 && neutronPriceBase > 0, "bad price");
         NEUTRON_TOKEN.burn(msg.sender, neutronIn);
         uint256 grossBase = Math.mulDiv(neutronIn, neutronPriceBase, WAD);
@@ -440,55 +357,38 @@ contract StableCoinReactor is ReentrancyGuard {
         PROTON_TOKEN.mint(to, protonOut);
         decayedVolumeBase -= _grossBaseToInt(grossBase);
 
-        emit TransmuteMinus(
-            msg.sender,
-            to,
-            neutronIn,
-            protonOut,
-            feeWad,
-            decayedVolumeBase
-        );
+        emit TransmuteMinus(msg.sender, to, neutronIn, protonOut, feeWad, decayedVolumeBase);
     }
 
-    function _bootstrapFissionOutputs(
-        uint256 netBase,
-        uint256 basePriceWad
-    ) internal pure returns (uint256 neutronOut, uint256 protonOut) {
+    function _bootstrapFissionOutputs(uint256 netBase, uint256 basePriceWad)
+        internal
+        pure
+        returns (uint256 neutronOut, uint256 protonOut)
+    {
         require(basePriceWad > 0, "bad price");
         uint256 depositValueWad = Math.mulDiv(netBase, basePriceWad, WAD);
         require(depositValueWad > 0, "AmountTooSmall");
         uint256 neutronValueWad = Math.mulDiv(depositValueWad, 1, 3);
         require(neutronValueWad > 0, "AmountTooSmall");
-        uint256 baseForNeutronWad = Math.mulDiv(
-            neutronValueWad,
-            WAD,
-            basePriceWad
-        );
-        require(
-            baseForNeutronWad > 0 && baseForNeutronWad < netBase,
-            "invalid split"
-        );
+        uint256 baseForNeutronWad = Math.mulDiv(neutronValueWad, WAD, basePriceWad);
+        require(baseForNeutronWad > 0 && baseForNeutronWad < netBase, "invalid split");
         uint256 protonBaseWad = netBase - baseForNeutronWad;
         require(protonBaseWad > 0, "invalid split");
         return (neutronValueWad, protonBaseWad);
     }
 
-    function _neutronPriceInBase(
-        uint256 reserveTokens,
-        uint256 neutronSupplyTokens,
-        uint256 basePriceWad
-    ) internal view returns (uint256) {
+    function _neutronPriceInBase(uint256 reserveTokens, uint256 neutronSupplyTokens, uint256 basePriceWad)
+        internal
+        view
+        returns (uint256)
+    {
         uint256 rWad = reserveTokens;
         if (rWad == 0) return 0;
         if (neutronSupplyTokens == 0) {
             require(basePriceWad > 0, "bad price");
             return Math.mulDiv(PEGGED_ASSET_WAD, WAD, basePriceWad);
         }
-        uint256 q = _qWadDynamic(
-            reserveTokens,
-            neutronSupplyTokens,
-            basePriceWad
-        );
+        uint256 q = _qWadDynamic(reserveTokens, neutronSupplyTokens, basePriceWad);
         return Math.mulDiv(q, rWad, neutronSupplyTokens);
     }
 
@@ -505,11 +405,7 @@ contract StableCoinReactor is ReentrancyGuard {
         if (rWad == 0) {
             return 0;
         }
-        uint256 q = _qWadDynamic(
-            reserveTokens,
-            neutronSupplyTokens,
-            basePriceWad
-        );
+        uint256 q = _qWadDynamic(reserveTokens, neutronSupplyTokens, basePriceWad);
         if (q >= WAD) {
             return 0;
         }
@@ -517,11 +413,11 @@ contract StableCoinReactor is ReentrancyGuard {
         return Math.mulDiv(oneMinusQ, rWad, protonSupplyTokens);
     }
 
-    function _qWadDynamic(
-        uint256 reserveTokens,
-        uint256 neutronSupplyTokens,
-        uint256 basePriceWad
-    ) internal view returns (uint256) {
+    function _qWadDynamic(uint256 reserveTokens, uint256 neutronSupplyTokens, uint256 basePriceWad)
+        internal
+        view
+        returns (uint256)
+    {
         if (neutronSupplyTokens == 0) {
             return 0;
         }

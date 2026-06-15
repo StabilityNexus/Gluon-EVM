@@ -53,7 +53,7 @@ contract MockPyth {
 
     // This is the function the Adapter calls for safety
     function getPriceNoOlderThan(bytes32, uint256) external view returns (Price memory) {
-         return Price(priceVal, 0, expoVal, publishTimeVal);
+        return Price(priceVal, 0, expoVal, publishTimeVal);
     }
 
     function getUpdateFee(bytes[] calldata) external pure returns (uint256) {
@@ -77,12 +77,12 @@ contract GluonOracleTest is Test {
     function testChainlinkPriceScaling() public {
         // Case 1: Chainlink has 8 decimals (e.g., BTC/USD)
         mockCL = new MockChainlinkAggregator(8, 50000 * 1e8);
-        
+
         // FIXED: Passed MAX_AGE to constructor
         chainlinkAdapter = new GluonChainlinkAdapter(address(mockCL), MAX_AGE);
 
         uint256 price = chainlinkAdapter.getPrice();
-        
+
         // Expected: 50,000 * 1e18 (Standard WAD)
         assertEq(price, 50000 * 1e18, "Chainlink 8 dec scaling failed");
     }
@@ -90,7 +90,7 @@ contract GluonOracleTest is Test {
     function testPythPriceScaling() public {
         // Case 1: Pyth price is 2000 * 1e-8
         mockPyth = new MockPyth(200000000000, -8);
-        
+
         // FIXED: Passed MAX_AGE to constructor
         pythAdapter = new GluonPythAdapter(address(mockPyth), MOCK_PRICE_ID, MAX_AGE);
 
@@ -99,7 +99,7 @@ contract GluonOracleTest is Test {
         // Expected: 2000 * 1e18
         assertEq(price, 2000 * 1e18, "Pyth neg expo scaling failed");
     }
-    
+
     function testOracleInterfaceCompatibility() public {
         // Setup simple mocks again for this test
         mockCL = new MockChainlinkAggregator(8, 100 * 1e8);
@@ -112,7 +112,7 @@ contract GluonOracleTest is Test {
         // Ensure both adapters can be stored in the generic interface
         IGluonOracle oracle1 = IGluonOracle(address(chainlinkAdapter));
         IGluonOracle oracle2 = IGluonOracle(address(pythAdapter));
-        
+
         assertTrue(address(oracle1) != address(0));
         assertTrue(address(oracle2) != address(0));
     }

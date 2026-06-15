@@ -11,13 +11,7 @@ interface AggregatorV3Interface {
     function latestRoundData()
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        );
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 }
 
 // wraps a chainlink feed and exposes it as IOracle
@@ -31,7 +25,7 @@ contract ChainlinkToOracleAdapter is IOracle {
 
     // reads chainlink answer and scales to WAD
     function getValue() public view returns (uint256 value) {
-        (, int256 answer, , , ) = feed.latestRoundData();
+        (, int256 answer,,,) = feed.latestRoundData();
         require(answer > 0, "bad value");
         // casting is safe because answer > 0
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -49,7 +43,7 @@ contract ChainlinkToOracleAdapter is IOracle {
 
     // last update timestamp from chainlink
     function lastUpdated() external view returns (uint256 timestamp) {
-        (, , , uint256 updatedAt, ) = feed.latestRoundData();
+        (,,, uint256 updatedAt,) = feed.latestRoundData();
         return updatedAt;
     }
 
@@ -58,10 +52,7 @@ contract ChainlinkToOracleAdapter is IOracle {
     }
 
     // scale native decimals to WAD (1e18)
-    function _scaleToWad(
-        uint256 value,
-        uint8 valueDecimals
-    ) internal pure returns (uint256) {
+    function _scaleToWad(uint256 value, uint8 valueDecimals) internal pure returns (uint256) {
         if (valueDecimals == 18) {
             return value;
         }

@@ -17,10 +17,10 @@ contract GluonOrbAdapter is IGluonOracle {
     constructor(address _orbFeed, uint256 _maxAge) {
         orbFeed = IOrbPriceFeed(_orbFeed);
         maxAge = _maxAge;
-        
+
         uint8 decimals = orbFeed.decimals();
         if (decimals < 18) {
-            scalingFactor = 10**(18 - decimals);
+            scalingFactor = 10 ** (18 - decimals);
         } else {
             scalingFactor = 1;
         }
@@ -29,10 +29,10 @@ contract GluonOrbAdapter is IGluonOracle {
     function getPrice() external view override returns (uint256) {
         uint256 price = orbFeed.getPrice();
         require(price > 0, "Orb: price <= 0");
-        
+
         uint256 updatedAt = orbFeed.updatedAt();
         require(block.timestamp - updatedAt <= maxAge, "Orb: Stale price");
-        
+
         return price * scalingFactor;
     }
 
