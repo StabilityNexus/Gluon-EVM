@@ -17,9 +17,9 @@ contract GluonChainlinkAdapter is IGluonOracle {
         dataFeed = AggregatorV3Interface(_dataFeed);
         maxAge = _maxAge;
         uint8 decimals = dataFeed.decimals();
-        
+
         if (decimals <= 18) {
-            scalingFactor = 10**(18 - decimals);
+            scalingFactor = 10 ** (18 - decimals);
         } else {
             // For feeds with > 18 decimals, we need to divide, not multiply
             // Store decimals - 18 and handle in getPrice()
@@ -28,10 +28,10 @@ contract GluonChainlinkAdapter is IGluonOracle {
     }
 
     function getPrice() external view override returns (uint256) {
-        (, int256 answer, , uint256 updatedAt, ) = dataFeed.latestRoundData();
+        (, int256 answer,, uint256 updatedAt,) = dataFeed.latestRoundData();
         require(answer > 0, "Chainlink: price <= 0");
         require(block.timestamp - updatedAt <= maxAge, "Chainlink: Stale price");
-        
+
         return uint256(answer) * scalingFactor;
     }
 

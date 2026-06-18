@@ -9,11 +9,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * @dev ERC20 token that can be minted and burned by the owner (reactor contract)
  */
 contract Tokeon is ERC20, Ownable {
-    constructor(
-        string memory name,
-        string memory symbol,
-        address owner
-    ) ERC20(name, symbol) Ownable(owner) {}
+    constructor(string memory name, string memory symbol, address owner) ERC20(name, symbol) Ownable(owner) {}
 
     /**
      * @dev Mint tokens to a specific address

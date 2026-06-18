@@ -31,11 +31,11 @@ contract GluonPythAdapter is IGluonOracle {
     function updatePriceFeeds(bytes[] calldata updateData) external payable override {
         uint256 fee = pyth.getUpdateFee(updateData);
         require(msg.value >= fee, "GluonPythAdapter: insufficient fee");
-        
+
         pyth.updatePriceFeeds{value: fee}(updateData);
-        
+
         if (msg.value > fee) {
-            (bool success, ) = msg.sender.call{value: msg.value - fee}("");
+            (bool success,) = msg.sender.call{value: msg.value - fee}("");
             require(success, "refund failed");
         }
     }
@@ -43,16 +43,16 @@ contract GluonPythAdapter is IGluonOracle {
     function _pythPriceToWad(Price memory price) internal pure returns (uint256) {
         require(price.price > 0, "bad price");
         uint256 unsignedPrice = uint256(uint64(price.price));
-        
+
         if (price.expo >= 0) {
             uint32 exp = uint32(uint32(price.expo));
             require(exp <= MAX_PRICE_EXP, "expo too large");
-            uint256 scale = 10**exp;
+            uint256 scale = 10 ** exp;
             return Math.mulDiv(unsignedPrice, scale * WAD, 1);
         } else {
             uint32 exp = uint32(uint32(-price.expo));
             require(exp <= MAX_PRICE_EXP, "expo too large");
-            uint256 scale = 10**exp;
+            uint256 scale = 10 ** exp;
             return Math.mulDiv(unsignedPrice, WAD, scale);
         }
     }
