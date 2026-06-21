@@ -69,4 +69,38 @@ contract ChainlinkAdapterTest is Test {
         vm.expectRevert("bad value");
         adapter.getValue();
     }
+
+    function testRevertsOnZeroFeedAddress() public {
+        vm.expectRevert("invalid feed");
+        new ChainlinkToOracleAdapter(address(0));
+    }
+
+    function testRevertsOnNegativeAnswer() public {
+        MockChainlinkFeed feed = new MockChainlinkFeed(8, -1);
+        ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
+
+        vm.expectRevert("bad value");
+        adapter.getValue();
+    }
+
+    function testScalesSixDecimalsToWad() public {
+        MockChainlinkFeed feed = new MockChainlinkFeed(6, 1234 * 1e6);
+        ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
+
+        assertEq(adapter.getValue(), 1234 * 1e18, "6 dec scaling failed");
+    }
+
+    function testScalesZeroDecimalsToWad() public {
+        MockChainlinkFeed feed = new MockChainlinkFeed(0, 1234);
+        ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
+
+        assertEq(adapter.getValue(), 1234 * 1e18, "0 dec scaling failed");
+    }
+
+    function testDescriptionReturnsFeedDescription() public {
+        MockChainlinkFeed feed = new MockChainlinkFeed(8, 100 * 1e8);
+        ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
+
+        assertEq(adapter.description(), "MOCK / USD", "wrong description");
+    }
 }

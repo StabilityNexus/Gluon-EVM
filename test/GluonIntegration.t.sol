@@ -95,4 +95,46 @@ contract GluonIntegrationTest is Test {
 
         vm.stopPrank();
     }
+
+    function testReactorRejectsZeroOracle() public {
+        vm.expectRevert("Invalid oracle");
+
+        factory.deployReactor(
+            "Gluon Vault",
+            "USD Coin",
+            "USDC",
+            "Gluon USD",
+            "GUSD",
+            address(baseToken),
+            address(0),
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            0,
+            0,
+            15e17
+        );
+    }
+
+    function testReactorRejectsEOAOracle() public {
+        address eoaOracle = makeAddr("eoaOracle");
+
+        vm.expectRevert("Oracle not contract");
+
+        factory.deployReactor(
+            "Gluon Vault",
+            "USD Coin",
+            "USDC",
+            "Gluon USD",
+            "GUSD",
+            address(baseToken),
+            eoaOracle,
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            0,
+            0,
+            15e17
+        );
+    }
 }
