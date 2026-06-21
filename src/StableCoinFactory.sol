@@ -29,7 +29,7 @@ contract StableCoinFactory is Ownable {
 
     /**
      * Deploy a new Reactor
-     * @param oracleParam      Address of the compliant IGluonOracle adapter
+     * @param oracleParam      Address of an IOracle-compatible adapter
      */
     function deployReactor(
         string memory vaultNameParam,
@@ -38,7 +38,7 @@ contract StableCoinFactory is Ownable {
         string memory peggedAssetNameParam,
         string memory peggedAssetSymbolParam,
         address baseTokenParam,
-        address oracleParam, // Changed from pyth/priceId to generic oracleParam
+        address oracleParam,
         string memory protonNameParam,
         string memory protonSymbolParam,
         address treasuryParam,
