@@ -23,6 +23,7 @@ contract DeployGluon is Script {
         console.log("Factory Deployed: ", address(factory));
 
         if (chainlinkFeedAddress != address(0)) {
+            require(chainlinkFeedAddress.code.length > 0, "CHAINLINK_FEED not contract");
             chainlinkAdapter = new ChainlinkToOracleAdapter(chainlinkFeedAddress);
             console.log("Chainlink Adapter Deployed: ", address(chainlinkAdapter));
         }
