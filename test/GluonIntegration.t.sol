@@ -96,20 +96,14 @@ contract GluonIntegrationTest is Test {
 
     function testFissionWithAdapter() public {
         address user = makeAddr("user");
-        baseToken.mint(user, 1000 * 1e18);
 
-        vm.startPrank(user);
-        baseToken.approve(address(reactor), 1000 * 1e18);
-
-        reactor.fission(100 * 1e18, user);
+        _fundAndFission(user, 100 * 1e18);
 
         uint256 neutronBal = reactor.NEUTRON_TOKEN().balanceOf(user);
         uint256 protonBal = reactor.PROTON_TOKEN().balanceOf(user);
 
         assertTrue(neutronBal > 0, "Neutron tokens not minted");
         assertTrue(protonBal > 0, "Proton tokens not minted");
-
-        vm.stopPrank();
     }
 
     function testFusionAfterFissionWithAdapter() public {
