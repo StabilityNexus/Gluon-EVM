@@ -34,27 +34,27 @@ contract ChainlinkAdapterTest is Test {
         // $50000 with 8 decimals
         MockChainlinkFeed feed = new MockChainlinkFeed(8, 50000 * 1e8);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
-        assertEq(adapter.getValue(), 50000 * 1e18, "8 dec scaling failed");
+        assertEq(adapter.readValue(), 50000 * 1e18, "8 dec scaling failed");
     }
 
     function testSupportsEighteenDecimals() public {
         MockChainlinkFeed feed = new MockChainlinkFeed(18, 2000 * 1e18);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
-        assertEq(adapter.getValue(), 2000 * 1e18, "18 dec scaling failed");
+        assertEq(adapter.readValue(), 2000 * 1e18, "18 dec scaling failed");
     }
 
     function testSupportsMoreThanEighteenDecimals() public {
         // 20 decimals, should divide down to WAD
         MockChainlinkFeed feed = new MockChainlinkFeed(20, 2000 * 1e20);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
-        assertEq(adapter.getValue(), 2000 * 1e18, "20 dec scaling failed");
+        assertEq(adapter.readValue(), 2000 * 1e18, "20 dec scaling failed");
     }
 
     function testMinAndMaxEqualValue() public {
         MockChainlinkFeed feed = new MockChainlinkFeed(8, 100 * 1e8);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
-        assertEq(adapter.getMinValue(), adapter.getValue(), "min != value");
-        assertEq(adapter.getMaxValue(), adapter.getValue(), "max != value");
+        assertEq(adapter.readMinValue(), adapter.readValue(), "min != value");
+        assertEq(adapter.readMaxValue(), adapter.readValue(), "max != value");
     }
 
     function testLastUpdatedReturnsFeedTimestamp() public {
@@ -67,7 +67,7 @@ contract ChainlinkAdapterTest is Test {
         MockChainlinkFeed feed = new MockChainlinkFeed(8, 0);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
         vm.expectRevert("bad value");
-        adapter.getValue();
+        adapter.readValue();
     }
 
     function testRevertsOnZeroFeedAddress() public {
@@ -80,21 +80,21 @@ contract ChainlinkAdapterTest is Test {
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
 
         vm.expectRevert("bad value");
-        adapter.getValue();
+        adapter.readValue();
     }
 
     function testScalesSixDecimalsToWad() public {
         MockChainlinkFeed feed = new MockChainlinkFeed(6, 1234 * 1e6);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
 
-        assertEq(adapter.getValue(), 1234 * 1e18, "6 dec scaling failed");
+        assertEq(adapter.readValue(), 1234 * 1e18, "6 dec scaling failed");
     }
 
     function testScalesZeroDecimalsToWad() public {
         MockChainlinkFeed feed = new MockChainlinkFeed(0, 1234);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
 
-        assertEq(adapter.getValue(), 1234 * 1e18, "0 dec scaling failed");
+        assertEq(adapter.readValue(), 1234 * 1e18, "0 dec scaling failed");
     }
 
     function testDescriptionReturnsFeedDescription() public {
