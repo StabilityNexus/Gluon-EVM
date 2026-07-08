@@ -152,7 +152,7 @@ contract StableCoinReactor is ReentrancyGuard {
     /// @dev Base/PeggedAsset price (WAD).
     /// Delegates to the Oracle Adapter.
     function getBasePriceInPeggedAsset() public view returns (uint256) {
-        return ORACLE.getValue();
+        return ORACLE.readValue();
     }
 
     function qWad() public view returns (uint256) {

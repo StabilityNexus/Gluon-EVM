@@ -24,7 +24,7 @@ contract ChainlinkToOracleAdapter is IOracle {
     }
 
     // reads chainlink answer and scales to WAD
-    function getValue() public view returns (uint256 value) {
+    function readValue() public view returns (uint256 value) {
         (, int256 answer,,,) = feed.latestRoundData();
         require(answer > 0, "bad value");
         // casting is safe because answer > 0
@@ -33,12 +33,12 @@ contract ChainlinkToOracleAdapter is IOracle {
     }
 
     // chainlink has single value, so min = max = value
-    function getMaxValue() external view returns (uint256 maxValue) {
-        return getValue();
+    function readMaxValue() external view returns (uint256 maxValue) {
+        return readValue();
     }
 
-    function getMinValue() external view returns (uint256 minValue) {
-        return getValue();
+    function readMinValue() external view returns (uint256 minValue) {
+        return readValue();
     }
 
     // last update timestamp from chainlink

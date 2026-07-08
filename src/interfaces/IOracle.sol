@@ -5,13 +5,13 @@ pragma solidity ^0.8.20;
 // values are WAD, implementer handles scaling
 interface IOracle {
     // latest value in WAD
-    function getValue() external view returns (uint256 value);
+    function readValue() external view returns (uint256 value);
 
     // upper value in WAD
-    function getMaxValue() external view returns (uint256 maxValue);
+    function readMaxValue() external view returns (uint256 maxValue);
 
     // lower value in WAD
-    function getMinValue() external view returns (uint256 minValue);
+    function readMinValue() external view returns (uint256 minValue);
 
     // when value was last updated
     function lastUpdated() external view returns (uint256 timestamp);
