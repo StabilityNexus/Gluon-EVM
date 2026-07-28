@@ -219,14 +219,14 @@ contract GluonIntegrationTest is Test {
         vm.startPrank(user);
         baseToken.approve(address(badReactor), amount);
 
-        vm.expectRevert("bad value");
+        vm.expectRevert(ChainlinkToOracleAdapter.BadValue.selector);
         badReactor.fission(amount, user);
 
         vm.stopPrank();
     }
 
     function testReactorRejectsZeroOracle() public {
-        vm.expectRevert("Invalid oracle");
+        vm.expectRevert(StableCoinReactor.InvalidOracle.selector);
 
         factory.deployReactor(
             "Gluon Vault",
@@ -248,7 +248,7 @@ contract GluonIntegrationTest is Test {
     function testReactorRejectsEOAOracle() public {
         address eoaOracle = makeAddr("eoaOracle");
 
-        vm.expectRevert("Oracle not contract");
+        vm.expectRevert(StableCoinReactor.OracleNotContract.selector);
 
         factory.deployReactor(
             "Gluon Vault",

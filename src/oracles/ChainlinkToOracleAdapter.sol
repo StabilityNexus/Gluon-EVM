@@ -16,17 +16,19 @@ interface AggregatorV3Interface {
 
 // wraps a chainlink feed and exposes it as IOracle
 contract ChainlinkToOracleAdapter is IOracle {
+    error InvalidFeed();
+    error BadValue();
     AggregatorV3Interface public immutable feed;
 
     constructor(address feedParam) {
-        require(feedParam != address(0), "invalid feed");
+        if (feedParam == address(0)) revert InvalidFeed();
         feed = AggregatorV3Interface(feedParam);
     }
 
     // reads chainlink answer and scales to WAD
     function readValue() public view returns (uint256 value) {
         (, int256 answer,,,) = feed.latestRoundData();
-        require(answer > 0, "bad value");
+        if (answer <= 0) revert BadValue();
         // casting is safe because answer > 0
         // forge-lint: disable-next-line(unsafe-typecast)
         return _scaleToWad(uint256(answer), feed.decimals());
