@@ -225,8 +225,8 @@ contract GluonIntegrationTest is Test {
         vm.stopPrank();
     }
 
-    function testReactorRejectsZeroOracle() public {
-        vm.expectRevert(StableCoinReactor.InvalidOracle.selector);
+    function testFactoryRejectsZeroOracle() public {
+        vm.expectRevert(StableCoinFactory.InvalidOracle.selector);
 
         factory.deployReactor(
             "Gluon Vault",
