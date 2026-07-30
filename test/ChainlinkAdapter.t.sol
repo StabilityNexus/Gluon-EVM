@@ -66,12 +66,12 @@ contract ChainlinkAdapterTest is Test {
     function testRevertsOnZeroAnswer() public {
         MockChainlinkFeed feed = new MockChainlinkFeed(8, 0);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
-        vm.expectRevert("bad value");
+        vm.expectRevert(ChainlinkToOracleAdapter.BadValue.selector);
         adapter.readValue();
     }
 
     function testRevertsOnZeroFeedAddress() public {
-        vm.expectRevert("invalid feed");
+        vm.expectRevert(ChainlinkToOracleAdapter.InvalidFeed.selector);
         new ChainlinkToOracleAdapter(address(0));
     }
 
@@ -79,7 +79,7 @@ contract ChainlinkAdapterTest is Test {
         MockChainlinkFeed feed = new MockChainlinkFeed(8, -1);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
 
-        vm.expectRevert("bad value");
+        vm.expectRevert(ChainlinkToOracleAdapter.BadValue.selector);
         adapter.readValue();
     }
 

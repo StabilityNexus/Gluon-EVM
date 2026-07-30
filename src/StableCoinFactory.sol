@@ -25,6 +25,20 @@ contract StableCoinFactory is Ownable {
     address[] public deployedReactors;
     mapping(address => address[]) public reactorsByBase;
 
+    error EmptyVaultName();
+    error EmptyBaseName();
+    error EmptyBaseSymbol();
+    error EmptyPegName();
+    error EmptyPegSymbol();
+    error EmptyProtonName();
+    error EmptyProtonSymbol();
+    error InvalidBase();
+    error InvalidOracle();
+    error InvalidTreasury();
+    error InvalidFissionFee();
+    error InvalidFusionFee();
+    error InvalidCriticalReserveRatio();
+
     constructor() Ownable(msg.sender) {}
 
     /**
@@ -46,19 +60,19 @@ contract StableCoinFactory is Ownable {
         uint256 fusionFeeParam,
         uint256 criticalReserveRatioWadParam
     ) public returns (address) {
-        require(bytes(vaultNameParam).length > 0, "Empty vault name");
-        require(bytes(baseAssetNameParam).length > 0, "Empty base name");
-        require(bytes(baseAssetSymbolParam).length > 0, "Empty base symbol");
-        require(bytes(peggedAssetNameParam).length > 0, "Empty peg name");
-        require(bytes(peggedAssetSymbolParam).length > 0, "Empty peg symbol");
-        require(bytes(protonNameParam).length > 0, "Empty proton name");
-        require(bytes(protonSymbolParam).length > 0, "Empty proton symbol");
-        require(baseTokenParam != address(0), "Invalid base");
-        require(oracleParam != address(0), "Invalid oracle");
-        require(treasuryParam != address(0), "Invalid treasury");
-        require(fissionFeeParam < 1e18, "fissionFee >= 100%");
-        require(fusionFeeParam < 1e18, "fusionFee >= 100%");
-        require(criticalReserveRatioWadParam >= 1e18, "critical ratio < 100%");
+        if (bytes(vaultNameParam).length == 0) revert EmptyVaultName();
+        if (bytes(baseAssetNameParam).length == 0) revert EmptyBaseName();
+        if (bytes(baseAssetSymbolParam).length == 0) revert EmptyBaseSymbol();
+        if (bytes(peggedAssetNameParam).length == 0) revert EmptyPegName();
+        if (bytes(peggedAssetSymbolParam).length == 0) revert EmptyPegSymbol();
+        if (bytes(protonNameParam).length == 0) revert EmptyProtonName();
+        if (bytes(protonSymbolParam).length == 0) revert EmptyProtonSymbol();
+        if (baseTokenParam == address(0)) revert InvalidBase();
+        if (oracleParam == address(0)) revert InvalidOracle();
+        if (treasuryParam == address(0)) revert InvalidTreasury();
+        if (fissionFeeParam >= 1e18) revert InvalidFissionFee();
+        if (fusionFeeParam >= 1e18) revert InvalidFusionFee();
+        if (criticalReserveRatioWadParam < 1e18) revert InvalidCriticalReserveRatio();
 
         StableCoinReactor reactor = new StableCoinReactor(
             vaultNameParam,
