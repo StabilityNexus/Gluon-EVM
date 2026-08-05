@@ -40,12 +40,8 @@ contract GenericMockOracle is IOracle {
         return value;
     }
 
-    function readMaxValue() external view returns (uint256) {
-        return maxValue;
-    }
-
-    function readMinValue() external view returns (uint256) {
-        return minValue;
+    function readValueInterval() external view returns (uint256 minValue_, uint256 maxValue_) {
+        return (minValue, maxValue);
     }
 
     function lastUpdated() external view returns (uint256) {
@@ -66,6 +62,15 @@ contract GenericIOracleIntegrationTest is Test {
     function setUp() public {
         factory = new StableCoinFactory();
         baseToken = new GenericMockERC20();
+    }
+
+    function testGenericOracleReturnsValueInterval() public {
+        GenericMockOracle oracle = new GenericMockOracle(1e18);
+
+        (uint256 minValue, uint256 maxValue) = oracle.readValueInterval();
+
+        assertEq(minValue, 1e18);
+        assertEq(maxValue, 1e18);
     }
 
     function testFactoryDeploysReactorWithGenericIOracle() public {
