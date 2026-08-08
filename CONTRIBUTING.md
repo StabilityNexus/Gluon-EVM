@@ -25,18 +25,18 @@ Pull requests without Discord communication may experience review delays.
 
 ## 📋 Table of Contents
 
-- [How Can I Contribute?](#how-can-i-contribute)
-- [Coding with AI](#coding-with-ai)
-- [Getting Started](#getting-started)
-- [Development Workflow](#development-workflow)
-- [Testing Your Changes](#testing-your-changes)
-- [Pull Request Guidelines](#pull-request-guidelines)
-- [Solidity Code Guidelines](#solidity-code-guidelines)
-- [Oracle Guidelines](#oracle-guidelines)
-- [Documentation Guidelines](#documentation-guidelines)
-- [Security](#security)
-- [Community Guidelines](#community-guidelines)
-- [Issue Assignment](#issue-assignment)
+- [How Can I Contribute?](#-how-can-i-contribute)
+- [Coding with AI](#-coding-with-ai)
+- [Getting Started](#-getting-started)
+- [Development Workflow](#-development-workflow)
+- [Testing Your Changes](#-testing-your-changes)
+- [Pull Request Guidelines](#-pull-request-guidelines)
+- [Solidity Code Guidelines](#-solidity-code-guidelines)
+- [Oracle Guidelines](#-oracle-guidelines)
+- [Documentation Guidelines](#-documentation-guidelines)
+- [Security](#-security)
+- [Community Guidelines](#-community-guidelines)
+- [Issue Assignment](#-issue-assignment)
 
 ---
 

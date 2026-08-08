@@ -2,7 +2,6 @@
 
 > Criteria adapted from the [OpenSSF Best Practices Badge](https://github.com/coreinfrastructure/best-practices-badge)
 > (MIT / CC BY 3.0) by OpenSSF contributors. Modified for AOSSIE multi-repo template use.
-
 > **Purpose:** Covers OpenSSF Best Practices criteria that are NOT auto-detected by OpenSSF Scorecard.
 > Scorecard already handles: License, SAST tools, CI tests, Security Policy file, Branch Protection,
 > Pinned Dependencies, Signed Releases, Maintained status, and Known Vulnerabilities.
@@ -22,16 +21,9 @@
 
 ## Score Summary
 
-<!-- Auto-updated by checklist-score.yml workflow — do not edit manually -->
-| Category           | Met | Total | Status |
-|--------------------|-----|-------|--------|
-| Basics             | 0   | 8     | 🔴     |
-| Change Control     | 0   | 6     | 🔴     |
-| Reporting          | 0   | 8     | 🔴     |
-| Quality            | 0   | 11    | 🔴     |
-| Security           | 0   | 9     | 🔴     |
-| Analysis           | 0   | 7     | 🔴     |
-| **Total**          | **0** | **49** | **0%** |
+> **Status:** Pending automated scoring.
+>
+> The checklist entries below reflect the project's current self-assessment and remain the source of truth until the checklist scoring workflow updates this summary.
 
 ---
 

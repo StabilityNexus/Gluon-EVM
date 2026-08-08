@@ -34,6 +34,9 @@ To execute this deployment again or verify:
 2. Run the deployment script:
 
    ```bash
+   set -a
    source .env
+   set +a
+
    forge script script/Deploy.s.sol:DeployGluon --rpc-url "$SEPOLIA_RPC_URL" --broadcast
    ```

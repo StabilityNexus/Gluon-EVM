@@ -268,6 +268,11 @@ Deployment addresses, transaction hashes, and constructor parameters should be d
 │   ├── ChainlinkAdapter.t.sol
 │   ├── GenericIOracleIntegration.t.sol
 │   └── GluonIntegration.t.sol
+├── AGENTS.md
+├── BestPracticesChecklist.md
+├── CONTRIBUTING.md
+├── Deployments.md
+├── MAINTAINERS.md
 ├── .gitmodules
 ├── foundry.toml
 └── README.md
@@ -344,7 +349,7 @@ forge test --match-path test/GenericIOracleIntegration.t.sol -vvv
 ### Run a Specific Test Function
 
 ```bash
-forge test --match-test <test_function_name> -vvv
+forge test --match-test TEST_FUNCTION_NAME -vvv
 ```
 
 ### Format Contracts
@@ -397,10 +402,10 @@ Never commit private keys, RPC credentials, or API keys.
 Set the required environment variables:
 
 ```bash
-export PRIVATE_KEY=<deployment-private-key>
-export SEPOLIA_RPC_URL=<sepolia-rpc-url>
-export CHAINLINK_FEED=<official-sepolia-chainlink-feed-address>
-export ETHERSCAN_API_KEY=<etherscan-api-key>
+export PRIVATE_KEY=YOUR_PRIVATE_KEY
+export SEPOLIA_RPC_URL=YOUR_SEPOLIA_RPC_URL
+export CHAINLINK_FEED=YOUR_CHAINLINK_FEED_ADDRESS
+export ETHERSCAN_API_KEY=YOUR_ETHERSCAN_API_KEY
 ```
 
 ### Dry Run
@@ -665,23 +670,7 @@ Keep each pull request focused on one improvement and include relevant tests.
 
 ## Maintainers, Mentors and Ideators
 
-Project roles are documented in [`MAINTAINERS.md`](./MAINTAINERS.md).
-
-### Ideators
-
-- [Dr. Bruno Woltzenlogel Paleo](https://github.com/Zahnentferner)
-- [Sarthak Dengre](https://github.com/DengreSarthak)
-
-### Mentors
-
-- [Dr. Bruno Woltzenlogel Paleo](https://github.com/Zahnentferner)
-- [Sarthak Dengre](https://github.com/DengreSarthak)
-
-### Maintainers
-
-- [Dr. Bruno Woltzenlogel Paleo](https://github.com/Zahnentferner)
-- [Sarthak Dengre](https://github.com/DengreSarthak)
-- [Sachin S Thankachan](https://github.com/sach2004)
+Project role assignments are documented in [`MAINTAINERS.md`](./MAINTAINERS.md), which is the canonical source for the current ideators, mentors, and maintainers.
 
 ---
 

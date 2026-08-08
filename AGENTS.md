@@ -57,5 +57,5 @@ For Gluon reactors, configuration such as oracle addresses, treasury addresses, 
 ---
 
 ## Git Workflow
-- **Commit Format:** Follow the **Chris Beams Git Commit Message** guide (imperative subject, capitalized, under 50 characters, wrapped body).
-- **Branch Format:** `feat/short-desc`, `fix/short-desc`, or `refactor/short-desc`.
+- **Commit Format:** Use concise prefixed commit messages consistent with the repository, such as `feat:`, `fix:`, `test:`, `docs:`, `refactor:`, `style:`, `chore:`, and `ci:`.
+- **Branch Format:** Use descriptive branches prefixed with `feat/`, `fix/`, `refactor/`, `test/`, or `docs/`.
