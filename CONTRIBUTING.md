@@ -14,7 +14,7 @@ We welcome useful bug fixes, tests, documentation improvements, and focused prot
 
 Before beginning work:
 
-- Join the [Stability Nexus Discord server](https://discord.gg/hjUhu33uAn)
+- Join the [Stability Nexus Discord server](https://discord.com/channels/995968619034984528/1283781488587837492)
 - Discuss the issue or proposed change in the relevant Discord channel
 - Post updates about your issue or pull request on Discord
 - Ask questions on Discord when requirements are unclear
