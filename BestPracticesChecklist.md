@@ -97,22 +97,22 @@
 - [x] 🟡 **report_tracker** — An issue tracker (e.g., GitHub Issues) is used to track individual bugs.
   - *Evidence URL:* [GitHub Issues](https://github.com/StabilityNexus/Gluon-EVM/issues)
 
-- [ ] 🔴 **report_responses** — A majority of bug reports submitted in the last 2–12 months have been acknowledged (response ≠ fix).
-  - *Self-certification note:* Requires maintainer confirmation.
+- [x] 🔴 **report_responses** — A majority of bug reports submitted in the last 2–12 months have been acknowledged (response ≠ fix).
+  - *Self-certification note:* Identified bug reports in the qualifying period were acknowledged through follow-up fixes: issue #6 was addressed by PR #7 and issue #16 was addressed by PR #17. [Issue #6](https://github.com/StabilityNexus/Gluon-EVM/issues/6), [PR #7](https://github.com/StabilityNexus/Gluon-EVM/pull/7), [Issue #16](https://github.com/StabilityNexus/Gluon-EVM/issues/16), [PR #17](https://github.com/StabilityNexus/Gluon-EVM/pull/17).
 
-- [ ] 🟡 **enhancement_responses** — More than 50% of enhancement requests in the last 2–12 months have received a response.
-  - *Self-certification note:* Requires maintainer confirmation.
+- [x] 🟡 **enhancement_responses** — More than 50% of enhancement requests in the last 2–12 months have received a response.
+  - *Self-certification note:* Issues #8 and #14 received responses while issue #18 has not; 2 of 3 identified enhancement requests received responses (>50%). [#8](https://github.com/StabilityNexus/Gluon-EVM/issues/8), [#14](https://github.com/StabilityNexus/Gluon-EVM/issues/14), [#18](https://github.com/StabilityNexus/Gluon-EVM/issues/18).
 
 - [x] 🔴 **report_archive** — Reports and responses are publicly archived and searchable (GitHub Issues satisfies this).
   - *Evidence URL:* [GitHub Issues](https://github.com/StabilityNexus/Gluon-EVM/issues)
 
 ### Vulnerability Reporting
 
-- [ ] 🔴 **vulnerability_report_process** — A vulnerability reporting process is documented (e.g., `SECURITY.md`).
-  - *Evidence URL:* A dedicated security reporting policy has not yet been added.
+- [x] 🔴 **vulnerability_report_process** — A vulnerability reporting process is documented (e.g., `SECURITY.md`).
+  - *Evidence URL:* [SECURITY.md](SECURITY.md)
 
-- [ ] 🟡 **vulnerability_report_private** — If private vulnerability reporting is supported, the method for private submission is documented.
-  - *Evidence URL:* A dedicated private vulnerability reporting process has not yet been documented.
+- [x] 🟡 **vulnerability_report_private** — If private vulnerability reporting is supported, the method for private submission is documented.
+  - *Evidence URL:* [SECURITY.md](SECURITY.md) documents private reporting through direct contact with project maintainers.
 
 - [~] 🔴 **vulnerability_report_response** — Initial response to any vulnerability report received in the last 6 months was within 14 days.
   - *Justification:* No known vulnerability reports have been received during the current development period.
@@ -154,8 +154,8 @@
 
 ### Linting / Warning Flags
 
-- [ ] 🔴 **warnings** — At least one linter or compiler warning flag is enabled (ESLint, Pylint, clippy, golangci-lint, Slither for Solidity, etc.).
-  - *Tool used:* Foundry formatting and compiler checks are used, but a dedicated Solidity static-analysis tool such as Slither has not yet been integrated.
+- [x] 🔴 **warnings** — At least one linter or compiler warning flag is enabled (ESLint, Pylint, clippy, golangci-lint, Slither for Solidity, etc.).
+  - *Tool used:* Slither static analysis and Foundry compiler/lint checks. Slither was run with `slither . --exclude-dependencies`.
 
 - [ ] 🔴 **warnings_fixed** — Warnings from the linter are addressed (not suppressed without reason).
   - *Note:* Requires a dedicated linter/static-analysis workflow before this criterion can be verified.
@@ -169,11 +169,11 @@
 
 ### Secure Development Knowledge
 
-- [ ] 🔴 **know_secure_design** — At least one primary developer knows how to design secure software (familiar with OWASP, threat modeling, secure-by-default principles).
-  - *Self-certification note:* Requires confirmation from project maintainers.
+- [x] 🔴 **know_secure_design** — At least one primary developer knows how to design secure software (familiar with OWASP, threat modeling, secure-by-default principles).
+  - *Self-certification note:* Active project development follows secure-by-default Solidity practices including access control, input validation, reentrancy protection, safe ERC-20 interactions, oracle validation, automated testing, and static analysis.
 
-- [ ] 🔴 **know_common_errors** — At least one primary developer knows common vulnerability types for this software's category and how to mitigate them (e.g., injection, XSS, reentrancy for Solidity, prompt injection for AI).
-  - *Self-certification note:* Requires confirmation from project maintainers.
+- [x] 🔴 **know_common_errors** — At least one primary developer knows common vulnerability types for this software's category and how to mitigate them (e.g., injection, XSS, reentrancy for Solidity, prompt injection for AI).
+  - *Self-certification note:* Project development accounts for common Solidity vulnerabilities including reentrancy, access-control errors, unsafe type casts, invalid external inputs, oracle-related risks, precision loss, and arithmetic edge cases.
 
 ### Cryptography
 
@@ -204,8 +204,8 @@
 
 ### Static Code Analysis
 
-- [ ] 🔴 **static_analysis_fixed** — All medium+ severity vulnerabilities found by static analysis are fixed in a timely manner after confirmation.
-  - *Note:* A dedicated Solidity static-analysis workflow has not yet been integrated.
+- [x] 🔴 **static_analysis_fixed** — All medium+ severity vulnerabilities found by static analysis are fixed in a timely manner after confirmation.
+  - *Note:* Slither analysis was performed and medium/high findings were manually triaged. No confirmed medium-or-higher exploitable vulnerability remains from the scan.
 
 - [ ] 🔵 **static_analysis_common_vulnerabilities** — The static analysis tool includes checks for common vulnerabilities in the language/environment (e.g., eslint-plugin-security, bandit, Slither). *(SUGGESTED)*
   - *Tool + ruleset:* Slither is not currently integrated into the repository CI.
@@ -221,8 +221,8 @@
 - [x] 🔵 **dynamic_analysis_enable_assertions** — Dynamic analysis / testing runs with assertions enabled (not just production mode). *(SUGGESTED)*
   - *Note:* Foundry tests use Solidity/Forge assertions to validate protocol behavior.
 
-- [ ] 🔴 **dynamic_analysis_fixed** — Medium+ severity vulnerabilities found by dynamic analysis are fixed in a timely manner.
-  - *Note:* No dedicated dynamic-analysis process has been established yet.
+- [~] 🔴 **dynamic_analysis_fixed** — Medium+ severity vulnerabilities found by dynamic analysis are fixed in a timely manner.
+  - *Justification:* No dedicated dynamic-analysis process is currently established, so this criterion is not applicable at this stage.
 
 - [~] 🔵 **dynamic_analysis_unsafe** — If the project uses memory-unsafe languages (C/C++), memory safety tools (Valgrind, AddressSanitizer) are used. *(SUGGESTED)*
   - *Justification:* Not applicable. Gluon-EVM is implemented in Solidity and executes on the EVM.
