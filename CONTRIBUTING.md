@@ -68,7 +68,7 @@ Repository commit:
 Test command:
 ```
 
-Do not publicly report vulnerabilities that could place deployed contracts or user funds at risk. Follow the instructions in the [Security](#security) section instead.
+Do not publicly report vulnerabilities that could place deployed contracts or user funds at risk. Follow the instructions in the [Security](#-security) section instead.
 
 ### Suggesting Features
 
