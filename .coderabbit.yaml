@@ -1,0 +1,198 @@
+# Enables IDE autocompletion for this config file
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+# Language for CodeRabbit's review comments
+language: en
+
+# Enable experimental features
+early_access: true
+
+chat:
+  # CodeRabbit will automatically respond to @coderabbitai mentions in PR comments
+  auto_reply: true
+
+issue_enrichment:
+  labeling:
+    auto_apply_labels: true
+    labeling_instructions:
+      - label: bug
+        instructions: Issues reporting bugs, errors, transaction failures, incorrect protocol behavior, oracle errors, regressions, or unexpected results.
+      - label: enhancement
+        instructions: Feature requests, protocol improvements, performance or gas optimizations, refactoring suggestions, oracle improvements, and new capabilities.
+      - label: documentation
+        instructions: Documentation updates, additions, corrections, deployment documentation, README improvements, and unclear developer instructions.
+  planning:
+    enabled: true
+    auto_planning:
+      enabled: true
+      labels:
+        - "plan-me"
+        - "feature"
+        - "!no-plan"
+
+reviews:
+  profile: assertive
+
+  auto_review:
+    # Automatically trigger reviews when PRs are opened or updated
+    enabled: true
+    ignore_title_keywords:
+      - "WIP"
+    drafts: false
+    base_branches:
+      - main
+      - develop
+
+  high_level_summary: true
+  sequence_diagrams: true
+  poem: true
+  review_status: true
+  collapse_walkthrough: false
+  changed_files_summary: true
+  request_changes_workflow: true
+
+  pre_merge_checks:
+    description:
+      mode: warning
+    docstrings:
+      mode: off
+
+  # Exclude generated Foundry output and dependencies
+  path_filters:
+    - "!lib/**"
+    - "!broadcast/**"
+    - "!cache/**"
+    - "!out/**"
+
+  tools:
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+    github-checks:
+      enabled: true
+      timeout_ms: 90000
+    languagetool:
+      enabled: true
+      enabled_only: false
+      level: default
+    yamllint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    checkov:
+      enabled: true
+
+  labeling_instructions:
+    - label: Solidity Lang
+      instructions: Apply when the PR/MR contains changes to Solidity source-code
+    - label: Bash Lang
+      instructions: >-
+        Apply when the PR/MR contains changes to shell-scripts or BASH code
+        snippets
+    - label: Make Lang
+      instructions: >-
+        Apply when the PR/MR contains changes to the file `Makefile` or makefile
+        code snippets
+    - label: Documentation
+      instructions: >-
+        Apply whenever project documentation (namely markdown source-code) is
+        updated by the PR/MR
+    - label: Linter
+      instructions: >-
+        Apply when the purpose of the PR/MR is related to fixing the feedback
+        from a linter
+
+  # Review instructions that apply to all files
+  instructions: >-
+    - Verify that documentation and comments are free of spelling mistakes
+    - Ensure that test code is automated, comprehensive, and follows testing best practices
+    - Verify that all critical functionality is covered by tests
+    - Confirm that the code meets the project's requirements and objectives
+    - Confirm that copyright years are up-to date whenever a file is changed
+    - Point out redundant obvious comments that do not add clarity to the code
+    - Ensure that comments are concise and suggest more concise comment statements if possible
+    - Discourage usage of verbose comment styles such as NatSpec
+    - Look for code duplication
+    - Suggest code completions when:
+        - seeing a TODO comment
+        - seeing a FIXME comment
+
+  path_instructions:
+    # Solidity smart contracts
+    - path: "**/*.sol"
+      instructions: |
+        Solidity:
+        - Review the Solidity contracts for security vulnerabilities and adherence to best practices.
+        - Ensure immutability is used appropriately (e.g., `immutable` and `constant` where applicable).
+        - Ensure there are no unbounded loops that could lead to gas exhaustion.
+        - Verify correct and explicit visibility modifiers for all state variables and functions.
+        - Flag variables that are declared but used only once or are unnecessary.
+        - Identify potential gas optimization opportunities without compromising readability or security.
+        - Verify that any modification to contract logic includes corresponding updates to automated tests.
+        - Ensure failure paths and revert scenarios are explicitly handled and validated.
+        - Validate proper access control enforcement.
+        - Ensure consistent and correct event emission for state-changing operations.
+        - Confirm architectural consistency with existing contracts.
+        - Flag major feature additions or architectural changes without prior design discussion where applicable.
+        - Flag pull requests that mix unrelated changes or multiple concerns.
+        - Ensure security-sensitive logic changes have adequate test coverage.
+        - Review for common smart contract vulnerabilities including:
+            - Reentrancy
+            - Improper input validation
+            - Access control bypass
+            - Integer overflows/underflows in unchecked blocks
+            - Front-running risks where applicable
+            - Unsafe type casts
+            - Precision loss
+
+        Gluon-EVM:
+        - Verify reserve, Proton, and Neutron accounting remains consistent.
+        - Review fission, fusion, and transmutation logic carefully.
+        - Ensure ERC-20 interactions are safe.
+        - Verify zero-address and invalid-input handling.
+        - Ensure protocol price calculations use 18-decimal WAD precision.
+
+    # Oracle implementations
+    - path: "src/oracles/**/*.sol"
+      instructions: |
+        Review oracle integrations for:
+        - Compatibility with the shared IOracle interface.
+        - uint256 price values normalized to 18-decimal WAD precision.
+        - Validation of invalid or non-positive upstream values.
+        - Correct timestamp handling from the underlying oracle.
+        - Safe decimal conversion without silent precision loss.
+        - Avoiding oracle-specific assumptions in generic reactor logic.
+
+    # Foundry Solidity tests
+    - path: "test/**/*.t.sol"
+      instructions: |
+        Review test files for:
+        - Comprehensive coverage of contract behavior.
+        - Coverage of success paths, edge cases, and failure/revert scenarios.
+        - Proper validation of access control restrictions.
+        - Verification of event emissions where applicable.
+        - Explicit validation of state changes after relevant function calls.
+        - Adequate test updates whenever contract logic is modified.
+        - Deterministic behavior without relying on execution order or shared mutable state.
+        - Clear and descriptive test names.
+        - Assertions that validate meaningful observable behavior.
+
+    # Foundry deployment scripts
+    - path: "script/**/*.s.sol"
+      instructions: |
+        Review deployment scripts for:
+        - No hardcoded private keys, secrets, or sensitive RPC credentials.
+        - Correct validation of external contract addresses where appropriate.
+        - Explicit network-specific configuration.
+        - Deployment parameters matching current contract constructors.
+        - Avoiding accidental inclusion of local-only deployment artifacts.
+
+    # Documentation
+    - path: "**/*.md"
+      instructions: |
+        Review documentation for:
+        - Broken links or references.
+        - TODOs, placeholders, or incomplete deployment values.
+        - Outdated commands, interfaces, or contract information.
+        - Claims describing functionality that has not yet been merged.
