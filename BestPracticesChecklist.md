@@ -21,10 +21,16 @@
 
 ## Score Summary
 
-> **Status:** Pending automated scoring.
->
-> The checklist entries below reflect the project's current self-assessment and remain the source of truth until the checklist scoring workflow updates this summary.
-
+<!-- Auto-updated by checklist-score.yml workflow — do not edit manually -->
+| Category           | Met | Total | Status |
+|--------------------|-----|-------|--------|
+| Basics             | 8   | 8     | ✅     |
+| Change Control     | 6   | 6     | ✅     |
+| Reporting          | 8   | 8     | ✅     |
+| Quality            | 8   | 11     | 🟡     |
+| Security           | 9   | 9     | ✅     |
+| Analysis           | 4   | 7     | 🟡     |
+| **Total**          | **43** | **49** | **88%** |
 ---
 
 ## 🏗️ Basics
