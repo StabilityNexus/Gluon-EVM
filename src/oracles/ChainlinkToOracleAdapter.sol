@@ -34,13 +34,10 @@ contract ChainlinkToOracleAdapter is IOracle {
         return _scaleToWad(uint256(answer), feed.decimals());
     }
 
-    // chainlink has single value, so min = max = value
-    function readMaxValue() external view returns (uint256 maxValue) {
-        return readValue();
-    }
-
-    function readMinValue() external view returns (uint256 minValue) {
-        return readValue();
+    // Chainlink provides one value, so min and max are equal
+    function readValueInterval() external view returns (uint256 minValue, uint256 maxValue) {
+        uint256 value = readValue();
+        return (value, value);
     }
 
     // last update timestamp from chainlink

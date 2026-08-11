@@ -7,11 +7,8 @@ interface IOracle {
     // latest value in WAD
     function readValue() external view returns (uint256 value);
 
-    // upper value in WAD
-    function readMaxValue() external view returns (uint256 maxValue);
-
-    // lower value in WAD
-    function readMinValue() external view returns (uint256 minValue);
+    // lower and upper values in WAD
+    function readValueInterval() external view returns (uint256 minValue, uint256 maxValue);
 
     // when value was last updated
     function lastUpdated() external view returns (uint256 timestamp);

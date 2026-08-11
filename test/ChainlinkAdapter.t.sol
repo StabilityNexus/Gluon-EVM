@@ -50,11 +50,14 @@ contract ChainlinkAdapterTest is Test {
         assertEq(adapter.readValue(), 2000 * 1e18, "20 dec scaling failed");
     }
 
-    function testMinAndMaxEqualValue() public {
+    function testValueIntervalEqualsValue() public {
         MockChainlinkFeed feed = new MockChainlinkFeed(8, 100 * 1e8);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
-        assertEq(adapter.readMinValue(), adapter.readValue(), "min != value");
-        assertEq(adapter.readMaxValue(), adapter.readValue(), "max != value");
+
+        (uint256 minValue, uint256 maxValue) = adapter.readValueInterval();
+
+        assertEq(minValue, adapter.readValue(), "min != value");
+        assertEq(maxValue, adapter.readValue(), "max != value");
     }
 
     function testLastUpdatedReturnsFeedTimestamp() public {
