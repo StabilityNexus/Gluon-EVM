@@ -1,12 +1,10 @@
-<p align="center">
-  <a href="https://github.com/StabilityNexus">
-    <img
-      src="https://avatars.githubusercontent.com/u/163145447?s=200&v=4"
-      alt="Stability Nexus"
-      width="120"
-    />
-  </a>
-</p>
+<div align="center">
+  <img alt="Stability Nexus" src="brand/org-logo.svg" width="140">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img alt="Gluon Logo" src="brand/logo.svg" width="140">
+</div>
+
+&nbsp;
 
 <div align="center">
 
