@@ -1,3 +1,5 @@
+# Gluon-EVM
+
 <div align="center">
   <img alt="Stability Nexus" src="brand/org-logo.svg" width="140">
   &nbsp;&nbsp;&nbsp;&nbsp;
@@ -7,8 +9,6 @@
 &nbsp;
 
 <div align="center">
-
-# Gluon-EVM
 
 **A modular EVM-based DeFi protocol for splitting reserve-backed value into stable and volatile assets.**
 
