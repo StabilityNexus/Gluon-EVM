@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IOracle} from "../interfaces/IOracle.sol";
+import {OracleScalingLib} from "./OracleScalingLib.sol";
 
 // minimal chainlink interface, only what we need
 interface AggregatorV3Interface {
@@ -31,7 +32,7 @@ contract ChainlinkToOracleAdapter is IOracle {
         if (answer <= 0) revert BadValue();
         // casting is safe because answer > 0
         // forge-lint: disable-next-line(unsafe-typecast)
-        return _scaleToWad(uint256(answer), feed.decimals());
+        return OracleScalingLib.scaleToWad(uint256(answer), feed.decimals());
     }
 
     // Chainlink provides one value, so min and max are equal
@@ -48,16 +49,5 @@ contract ChainlinkToOracleAdapter is IOracle {
 
     function description() external view returns (string memory) {
         return feed.description();
-    }
-
-    // scale native decimals to WAD (1e18)
-    function _scaleToWad(uint256 value, uint8 valueDecimals) internal pure returns (uint256) {
-        if (valueDecimals == 18) {
-            return value;
-        }
-        if (valueDecimals < 18) {
-            return value * (10 ** (18 - uint256(valueDecimals)));
-        }
-        return value / (10 ** (uint256(valueDecimals) - 18));
     }
 }
