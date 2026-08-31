@@ -28,7 +28,7 @@ contract DeployGluon is Script {
             console.log("Chainlink Adapter Deployed: ", address(chainlinkAdapter));
         }
 
-        // To deploy a reactor, pass an IOracle-compatible adapter address as oracleParam.
+        // To deploy a reactor, pass an IOracle-compatible oracle address as oracleParam.
 
         vm.stopBroadcast();
     }

@@ -1,4 +1,7 @@
 {
+  "lib/OrbOracle-Solidity": {
+    "rev": "81cbef8b8e34a3c6c06fe06b111a87d059ca8c10"
+  },
   "lib/forge-std": {
     "tag": {
       "name": "v1.10.0",
