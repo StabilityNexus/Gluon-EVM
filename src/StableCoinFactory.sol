@@ -43,7 +43,7 @@ contract StableCoinFactory is Ownable {
 
     /**
      * Deploy a new Reactor
-     * @param oracleParam      Address of an IOracle-compatible oracle
+     * @param oracleParam      Address of an IOracle-compatible adapter
      */
     function deployReactor(
         string memory vaultNameParam,
@@ -81,7 +81,7 @@ contract StableCoinFactory is Ownable {
             peggedAssetNameParam,
             peggedAssetSymbolParam,
             baseTokenParam,
-            oracleParam, // Pass the oracle address
+            oracleParam, // Pass the adapter address
             protonNameParam,
             protonSymbolParam,
             treasuryParam,
