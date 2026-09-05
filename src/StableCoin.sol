@@ -133,7 +133,9 @@ contract StableCoinReactor is ReentrancyGuard {
         if (treasuryParam == address(0)) revert InvalidTreasury();
         if (fissionFeeParam >= WAD) revert InvalidFissionFee();
         if (fusionFeeParam >= WAD) revert InvalidFusionFee();
-        if (criticalReserveRatioWadParam < WAD) revert InvalidCriticalReserveRatio();
+        if (criticalReserveRatioWadParam < WAD || criticalReserveRatioWadParam >= UPPER_RESERVE_RATIO) {
+            revert InvalidCriticalReserveRatio();
+        }
         if (bytes(vaultNameParam).length == 0) revert EmptyVaultName();
         if (bytes(baseAssetNameParam).length == 0) revert EmptyBaseName();
         if (bytes(baseAssetSymbolParam).length == 0) revert EmptyBaseSymbol();

@@ -53,6 +53,8 @@ contract GluonIntegrationTest is Test {
     MockERC20 baseToken;
     address treasury = makeAddr("treasury");
 
+    event PegAdjusted(uint256 previousAlpha, uint256 newAlpha, uint256 reserveRatio);
+
     function setUp() public {
         baseToken = new MockERC20("USD Coin", "USDC");
 
@@ -66,6 +68,13 @@ contract GluonIntegrationTest is Test {
     }
 
     function _deployReactor(address oracleAddress) internal returns (StableCoinReactor) {
+        return _deployReactorWithCriticalRatio(oracleAddress, 15e17);
+    }
+
+    function _deployReactorWithCriticalRatio(address oracleAddress, uint256 criticalReserveRatio)
+        internal
+        returns (StableCoinReactor)
+    {
         address reactorAddr = factory.deployReactor(
             "Gluon Vault",
             "USD Coin",
@@ -79,7 +88,7 @@ contract GluonIntegrationTest is Test {
             treasury,
             0,
             0,
-            15e17 // 150% critical reserve ratio
+            criticalReserveRatio
         );
 
         return StableCoinReactor(reactorAddr);
@@ -262,6 +271,20 @@ contract GluonIntegrationTest is Test {
             0,
             15e17
         );
+    }
+
+    function testReactorRejectsCriticalRatioAtUpperBound() public {
+        uint256 upperReserveRatio = reactor.UPPER_RESERVE_RATIO();
+
+        vm.expectRevert(StableCoinReactor.InvalidCriticalReserveRatio.selector);
+        _deployReactorWithCriticalRatio(address(adapter), upperReserveRatio);
+    }
+
+    function testReactorRejectsCriticalRatioAboveUpperBound() public {
+        uint256 upperReserveRatio = reactor.UPPER_RESERVE_RATIO();
+
+        vm.expectRevert(StableCoinReactor.InvalidCriticalReserveRatio.selector);
+        _deployReactorWithCriticalRatio(address(adapter), upperReserveRatio + 1);
     }
 
     function testReactorRejectsEOAOracle() public {
@@ -448,6 +471,9 @@ contract GluonIntegrationTest is Test {
 
         uint256 ratioBefore = reactor.reserveRatioPeggedAsset();
         assertGt(ratioBefore, reactor.UPPER_RESERVE_RATIO(), "precondition: ratio should be above 200%");
+
+        vm.expectEmit(false, false, false, true, address(reactor));
+        emit PegAdjusted(1e18, 101e16, ratioBefore);
 
         reactor.adjustPeg();
 
