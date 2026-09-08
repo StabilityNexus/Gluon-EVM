@@ -131,6 +131,7 @@ contract GenericIOracleIntegrationTest is Test {
         address user = makeAddr("fusionUser");
 
         _fundAndFission(reactor, user, 100e18);
+        _adjustIntoOperatingRange(reactor);
 
         uint256 balanceBefore = baseToken.balanceOf(user);
 
@@ -160,6 +161,22 @@ contract GenericIOracleIntegrationTest is Test {
         );
 
         return StableCoinReactor(reactorAddress);
+    }
+
+    function _adjustIntoOperatingRange(StableCoinReactor reactor) internal {
+        uint256 iterations;
+
+        while (
+            (reactor.reserveRatioPeggedAsset() < reactor.CRITICAL_RESERVE_RATIO()
+                    || reactor.reserveRatioPeggedAsset() > reactor.UPPER_RESERVE_RATIO()) && iterations < 100
+        ) {
+            reactor.adjustPeg();
+            iterations++;
+        }
+
+        uint256 ratio = reactor.reserveRatioPeggedAsset();
+        assertGe(ratio, reactor.CRITICAL_RESERVE_RATIO(), "failed to reach lower operating bound");
+        assertLe(ratio, reactor.UPPER_RESERVE_RATIO(), "failed to reach upper operating bound");
     }
 
     function _fundAndFission(StableCoinReactor reactor, address user, uint256 amount) internal {
