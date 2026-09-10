@@ -428,6 +428,8 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
         uint256 basePrice = getBasePriceInPeggedAsset();
+        if (basePrice == 0) return (0, 0);
+
         _requireOperatingRange(reserveTokens, neutronSupplyCached, basePrice);
 
         uint256 protonPriceBase = _protonPriceInBase(reserveTokens, protonSupplyCached, neutronSupplyCached, basePrice);
@@ -472,6 +474,8 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
         uint256 basePrice = getBasePriceInPeggedAsset();
+        if (basePrice == 0) return (0, 0);
+
         _requireOperatingRange(reserveTokens, neutronSupplyCached, basePrice);
 
         uint256 protonPriceBase = _protonPriceInBase(reserveTokens, protonSupplyCached, neutronSupplyCached, basePrice);

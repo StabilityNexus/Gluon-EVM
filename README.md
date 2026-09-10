@@ -96,9 +96,7 @@ The reactor:
 3. calculates the Proton and Neutron outputs
 4. mints both assets to the selected recipient
 
-For the first deposit, the reactor bootstraps the initial Proton and Neutron split using the oracle price.
-
-For later deposits, the output is calculated proportionally using the existing reserve and token supplies.
+Every user fission calculates the output proportionally using the existing reserve and token supplies, which are initialized during reactor deployment.
 
 ### Fusion
 

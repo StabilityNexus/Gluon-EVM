@@ -488,6 +488,33 @@ contract GluonIntegrationTest is Test {
         vm.stopPrank();
     }
 
+    function testTransmutationsAreNoOpWhenOraclePriceIsZero() public {
+        address user = makeAddr("zeroOracleTransmutationUser");
+        _fundAndFission(user, 100e18);
+
+        mockFeed.setPrice(0);
+
+        uint256 protonBalanceBefore = reactor.PROTON_TOKEN().balanceOf(user);
+        uint256 neutronBalanceBefore = reactor.NEUTRON_TOKEN().balanceOf(user);
+        uint256 protonSupplyBefore = reactor.PROTON_TOKEN().totalSupply();
+        uint256 neutronSupplyBefore = reactor.NEUTRON_TOKEN().totalSupply();
+
+        vm.startPrank(user);
+        (uint256 neutronOut, uint256 plusFee) = reactor.transmuteProtonToNeutron(1e18, user);
+        (uint256 protonOut, uint256 minusFee) = reactor.transmuteNeutronToProton(1e18, user);
+        vm.stopPrank();
+
+        assertEq(neutronOut, 0);
+        assertEq(protonOut, 0);
+        assertEq(plusFee, 0);
+        assertEq(minusFee, 0);
+
+        assertEq(reactor.PROTON_TOKEN().balanceOf(user), protonBalanceBefore);
+        assertEq(reactor.NEUTRON_TOKEN().balanceOf(user), neutronBalanceBefore);
+        assertEq(reactor.PROTON_TOKEN().totalSupply(), protonSupplyBefore);
+        assertEq(reactor.NEUTRON_TOKEN().totalSupply(), neutronSupplyBefore);
+    }
+
     function testTransmutationIsNoOpWhenProtonPriceIsZero() public {
         _prepareInitialReserve();
         StableCoinReactor boundaryReactor = _deployReactorWithCriticalRatio(address(adapter), 1e18);
