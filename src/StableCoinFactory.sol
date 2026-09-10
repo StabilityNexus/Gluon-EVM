@@ -3,8 +3,21 @@ pragma solidity ^0.8.20;
 
 import {StableCoinReactor} from "./StableCoin.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract StableCoinFactory is Ownable {
+    using SafeERC20 for IERC20;
+
+    struct PendingInitialization {
+        address initializer;
+        address baseToken;
+        uint256 reserveAmount;
+        bool funded;
+    }
+
+    PendingInitialization private pendingInitialization;
+
     event ReactorDeployed(
         address indexed reactor,
         address indexed base,
@@ -19,7 +32,8 @@ contract StableCoinFactory is Ownable {
         address oracleAddress,
         uint256 fissionFee,
         uint256 fusionFee,
-        uint256 criticalReserveRatioWad
+        uint256 criticalReserveRatioWad,
+        uint256 initialReserve
     );
 
     address[] public deployedReactors;
@@ -38,6 +52,9 @@ contract StableCoinFactory is Ownable {
     error InvalidFissionFee();
     error InvalidFusionFee();
     error InvalidCriticalReserveRatio();
+    error InvalidInitialReserve();
+    error InvalidInitialReserveRequest();
+    error DeploymentInProgress();
 
     constructor() Ownable(msg.sender) {}
 
@@ -58,8 +75,10 @@ contract StableCoinFactory is Ownable {
         address treasuryParam,
         uint256 fissionFeeParam,
         uint256 fusionFeeParam,
-        uint256 criticalReserveRatioWadParam
+        uint256 criticalReserveRatioWadParam,
+        uint256 initialReserveParam
     ) public returns (address) {
+        if (pendingInitialization.initializer != address(0)) revert DeploymentInProgress();
         if (bytes(vaultNameParam).length == 0) revert EmptyVaultName();
         if (bytes(baseAssetNameParam).length == 0) revert EmptyBaseName();
         if (bytes(baseAssetSymbolParam).length == 0) revert EmptyBaseSymbol();
@@ -73,6 +92,11 @@ contract StableCoinFactory is Ownable {
         if (fissionFeeParam >= 1e18) revert InvalidFissionFee();
         if (fusionFeeParam >= 1e18) revert InvalidFusionFee();
         if (criticalReserveRatioWadParam < 1e18) revert InvalidCriticalReserveRatio();
+        if (initialReserveParam == 0) revert InvalidInitialReserve();
+
+        pendingInitialization = PendingInitialization({
+            initializer: msg.sender, baseToken: baseTokenParam, reserveAmount: initialReserveParam, funded: false
+        });
 
         StableCoinReactor reactor = new StableCoinReactor(
             vaultNameParam,
@@ -87,10 +111,15 @@ contract StableCoinFactory is Ownable {
             treasuryParam,
             fissionFeeParam,
             fusionFeeParam,
-            criticalReserveRatioWadParam
+            criticalReserveRatioWadParam,
+            initialReserveParam
         );
 
+        if (!pendingInitialization.funded) revert InvalidInitialReserveRequest();
+        delete pendingInitialization;
+
         address reactorAddress = address(reactor);
+
         deployedReactors.push(reactorAddress);
         reactorsByBase[baseTokenParam].push(reactorAddress);
 
@@ -108,10 +137,25 @@ contract StableCoinFactory is Ownable {
             oracleParam,
             fissionFeeParam,
             fusionFeeParam,
-            criticalReserveRatioWadParam
+            criticalReserveRatioWadParam,
+            initialReserveParam
         );
 
         return reactorAddress;
+    }
+
+    function fundInitialReserve(address baseToken, uint256 amount) external {
+        PendingInitialization storage pending = pendingInitialization;
+
+        if (
+            pending.initializer == address(0) || pending.funded || baseToken != pending.baseToken
+                || amount != pending.reserveAmount
+        ) {
+            revert InvalidInitialReserveRequest();
+        }
+
+        pending.funded = true;
+        IERC20(baseToken).safeTransferFrom(pending.initializer, msg.sender, amount);
     }
 
     function getDeployedReactorsCount() external view returns (uint256) {

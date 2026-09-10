@@ -52,6 +52,7 @@ contract GluonIntegrationTest is Test {
     MockFeed mockFeed;
     MockERC20 baseToken;
     address treasury = makeAddr("treasury");
+    uint256 internal constant INITIAL_RESERVE = 100e18;
 
     event PegAdjusted(uint256 previousAlpha, uint256 newAlpha, uint256 reserveRatio);
 
@@ -68,7 +69,13 @@ contract GluonIntegrationTest is Test {
     }
 
     function _deployReactor(address oracleAddress) internal returns (StableCoinReactor) {
+        _prepareInitialReserve();
         return _deployReactorWithCriticalRatio(oracleAddress, 15e17);
+    }
+
+    function _prepareInitialReserve() internal {
+        baseToken.mint(address(this), INITIAL_RESERVE);
+        baseToken.approve(address(factory), INITIAL_RESERVE);
     }
 
     function _deployReactorWithCriticalRatio(address oracleAddress, uint256 criticalReserveRatio)
@@ -88,13 +95,16 @@ contract GluonIntegrationTest is Test {
             treasury,
             0,
             0,
-            criticalReserveRatio
+            criticalReserveRatio,
+            INITIAL_RESERVE
         );
 
         return StableCoinReactor(reactorAddr);
     }
 
     function _fundAndFission(address user, uint256 amount) internal {
+        _adjustIntoOperatingRange();
+
         baseToken.mint(user, amount);
 
         vm.startPrank(user);
@@ -104,19 +114,23 @@ contract GluonIntegrationTest is Test {
     }
 
     function _adjustIntoOperatingRange() internal {
+        _adjustIntoOperatingRange(reactor);
+    }
+
+    function _adjustIntoOperatingRange(StableCoinReactor target) internal {
         uint256 iterations;
 
         while (
-            (reactor.reserveRatioPeggedAsset() < reactor.CRITICAL_RESERVE_RATIO()
-                    || reactor.reserveRatioPeggedAsset() > reactor.UPPER_RESERVE_RATIO()) && iterations < 100
+            (target.reserveRatioPeggedAsset() < target.CRITICAL_RESERVE_RATIO()
+                    || target.reserveRatioPeggedAsset() > target.UPPER_RESERVE_RATIO()) && iterations < 100
         ) {
-            reactor.adjustPeg();
+            target.adjustPeg();
             iterations++;
         }
 
-        uint256 ratio = reactor.reserveRatioPeggedAsset();
-        assertGe(ratio, reactor.CRITICAL_RESERVE_RATIO(), "failed to reach lower operating bound");
-        assertLe(ratio, reactor.UPPER_RESERVE_RATIO(), "failed to reach upper operating bound");
+        uint256 ratio = target.reserveRatioPeggedAsset();
+        assertGe(ratio, target.CRITICAL_RESERVE_RATIO(), "failed to reach lower operating bound");
+        assertLe(ratio, target.UPPER_RESERVE_RATIO(), "failed to reach upper operating bound");
     }
 
     function testFissionWithAdapter() public {
@@ -234,23 +248,36 @@ contract GluonIntegrationTest is Test {
         assertGt(reactor.protonPriceInPeggedAsset(), 0, "bad updated proton pegged price");
     }
 
-    function testFissionRevertsWhenOracleReturnsBadPrice() public {
-        MockFeed badFeed = new MockFeed(0, 8);
-        ChainlinkToOracleAdapter badAdapter = new ChainlinkToOracleAdapter(address(badFeed));
-        StableCoinReactor badReactor = _deployReactor(address(badAdapter));
+    function testZeroInitialOraclePriceCannotEstablishValidSeedState() public {
+        MockFeed zeroFeed = new MockFeed(0, 8);
+        ChainlinkToOracleAdapter zeroAdapter = new ChainlinkToOracleAdapter(address(zeroFeed));
 
-        address user = makeAddr("badOracleUser");
-        uint256 amount = 100 * 1e18;
+        baseToken.mint(address(this), INITIAL_RESERVE);
+        baseToken.approve(address(factory), INITIAL_RESERVE);
 
-        baseToken.mint(user, amount);
+        vm.expectRevert(StableCoinReactor.InvalidInitialReserve.selector);
 
-        vm.startPrank(user);
-        baseToken.approve(address(badReactor), amount);
+        factory.deployReactor(
+            "Gluon Vault",
+            "USD Coin",
+            "USDC",
+            "Gluon USD",
+            "GUSD",
+            address(baseToken),
+            address(zeroAdapter),
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            0,
+            0,
+            15e17,
+            INITIAL_RESERVE
+        );
+    }
 
-        vm.expectRevert(ChainlinkToOracleAdapter.BadValue.selector);
-        badReactor.fission(amount, user);
-
-        vm.stopPrank();
+    function testFactoryRejectsInitialReserveCallbackOutsideDeployment() public {
+        vm.expectRevert(StableCoinFactory.InvalidInitialReserveRequest.selector);
+        factory.fundInitialReserve(address(baseToken), INITIAL_RESERVE);
     }
 
     function testFactoryRejectsZeroOracle() public {
@@ -269,12 +296,15 @@ contract GluonIntegrationTest is Test {
             treasury,
             0,
             0,
-            15e17
+            15e17,
+            INITIAL_RESERVE
         );
     }
 
     function testReactorRejectsCriticalRatioAtUpperBound() public {
         uint256 upperReserveRatio = reactor.UPPER_RESERVE_RATIO();
+
+        _prepareInitialReserve();
 
         vm.expectRevert(StableCoinReactor.InvalidCriticalReserveRatio.selector);
         _deployReactorWithCriticalRatio(address(adapter), upperReserveRatio);
@@ -282,6 +312,8 @@ contract GluonIntegrationTest is Test {
 
     function testReactorRejectsCriticalRatioAboveUpperBound() public {
         uint256 upperReserveRatio = reactor.UPPER_RESERVE_RATIO();
+
+        _prepareInitialReserve();
 
         vm.expectRevert(StableCoinReactor.InvalidCriticalReserveRatio.selector);
         _deployReactorWithCriticalRatio(address(adapter), upperReserveRatio + 1);
@@ -305,19 +337,77 @@ contract GluonIntegrationTest is Test {
             treasury,
             0,
             0,
-            15e17
+            15e17,
+            INITIAL_RESERVE
         );
     }
 
-    function testBootstrapFissionIsExemptFromOperatingRange() public {
-        address user = makeAddr("bootstrapExemptionUser");
+    function testDeploymentInitializesReserveAndLockedSupply() public view {
+        uint256 neutronSupply = reactor.NEUTRON_TOKEN().totalSupply();
+        uint256 protonSupply = reactor.PROTON_TOKEN().totalSupply();
 
-        assertEq(reactor.reserveRatioPeggedAsset(), 0, "precondition: empty reactor ratio should be zero");
+        assertEq(reactor.reserve(), INITIAL_RESERVE, "wrong initial reserve");
+        assertGt(neutronSupply, 0, "neutron seed missing");
+        assertGt(protonSupply, 0, "proton seed missing");
 
-        _fundAndFission(user, 100e18);
+        assertEq(
+            reactor.NEUTRON_TOKEN().balanceOf(address(reactor)),
+            neutronSupply,
+            "neutron seed should be locked in reactor"
+        );
+        assertEq(
+            reactor.PROTON_TOKEN().balanceOf(address(reactor)), protonSupply, "proton seed should be locked in reactor"
+        );
 
-        assertGt(reactor.NEUTRON_TOKEN().balanceOf(user), 0, "bootstrap should mint neutrons");
-        assertGt(reactor.PROTON_TOKEN().balanceOf(user), 0, "bootstrap should mint protons");
+        assertEq(reactor.reserveRatioPeggedAsset(), 3e18, "initial ratio should preserve previous bootstrap ratio");
+    }
+
+    function testDeploymentPreservesPreviousBootstrapSplitAtNonUnitPrice() public {
+        MockFeed pricedFeed = new MockFeed(123_456_789, 8);
+        ChainlinkToOracleAdapter pricedAdapter = new ChainlinkToOracleAdapter(address(pricedFeed));
+
+        _prepareInitialReserve();
+
+        StableCoinReactor seededReactor = _deployReactorWithCriticalRatio(address(pricedAdapter), 15e17);
+
+        uint256 basePrice = pricedAdapter.readValue();
+
+        uint256 depositValue = (INITIAL_RESERVE * basePrice) / 1e18;
+        uint256 expectedNeutronSeed = depositValue / 3;
+        uint256 neutronBacking = (expectedNeutronSeed * 1e18) / basePrice;
+        uint256 expectedProtonSeed = INITIAL_RESERVE - neutronBacking;
+
+        assertEq(
+            seededReactor.NEUTRON_TOKEN().totalSupply(),
+            expectedNeutronSeed,
+            "neutron seed should match previous bootstrap"
+        );
+        assertEq(
+            seededReactor.PROTON_TOKEN().totalSupply(),
+            expectedProtonSeed,
+            "proton seed should match previous bootstrap"
+        );
+    }
+
+    function testInitializationSeedRemainsAfterUserExit() public {
+        address user = makeAddr("seedInvariantUser");
+
+        _fundAndFission(user, INITIAL_RESERVE);
+
+        vm.prank(user);
+        reactor.fusion(INITIAL_RESERVE, user);
+
+        assertEq(reactor.reserve(), INITIAL_RESERVE, "seed reserve should remain");
+        assertEq(
+            reactor.NEUTRON_TOKEN().totalSupply(),
+            reactor.NEUTRON_TOKEN().balanceOf(address(reactor)),
+            "neutron seed should remain"
+        );
+        assertEq(
+            reactor.PROTON_TOKEN().totalSupply(),
+            reactor.PROTON_TOKEN().balanceOf(address(reactor)),
+            "proton seed should remain"
+        );
     }
 
     function testNormalFissionWorksInsideOperatingRange() public {
@@ -344,6 +434,7 @@ contract GluonIntegrationTest is Test {
         address user = makeAddr("highGuardUser");
 
         _fundAndFission(user, 100e18);
+        mockFeed.setPrice(2 * 1e8);
 
         uint256 ratio = reactor.reserveRatioPeggedAsset();
 
@@ -395,6 +486,47 @@ contract GluonIntegrationTest is Test {
         reactor.transmuteNeutronToProton(1e18, user);
 
         vm.stopPrank();
+    }
+
+    function testTransmutationIsNoOpWhenProtonPriceIsZero() public {
+        _prepareInitialReserve();
+        StableCoinReactor boundaryReactor = _deployReactorWithCriticalRatio(address(adapter), 1e18);
+
+        uint256 neutronSupply = boundaryReactor.NEUTRON_TOKEN().totalSupply();
+        uint256 reserveToRemove = boundaryReactor.reserve() - neutronSupply;
+
+        vm.prank(address(boundaryReactor));
+        assertTrue(baseToken.transfer(makeAddr("reserveSink"), reserveToRemove), "reserve transfer failed");
+
+        assertEq(boundaryReactor.reserveRatioPeggedAsset(), 1e18, "expected 100% reserve ratio");
+        assertEq(boundaryReactor.protonPriceInBase(), 0, "proton price should be zero");
+
+        address user = makeAddr("zeroProtonPriceUser");
+
+        vm.startPrank(address(boundaryReactor));
+        boundaryReactor.PROTON_TOKEN().transfer(user, 1e18);
+        boundaryReactor.NEUTRON_TOKEN().transfer(user, 1e18);
+        vm.stopPrank();
+
+        uint256 protonBalanceBefore = boundaryReactor.PROTON_TOKEN().balanceOf(user);
+        uint256 neutronBalanceBefore = boundaryReactor.NEUTRON_TOKEN().balanceOf(user);
+        uint256 protonSupplyBefore = boundaryReactor.PROTON_TOKEN().totalSupply();
+        uint256 neutronSupplyBefore = boundaryReactor.NEUTRON_TOKEN().totalSupply();
+
+        vm.startPrank(user);
+        (uint256 neutronOut, uint256 plusFee) = boundaryReactor.transmuteProtonToNeutron(1e18, user);
+        (uint256 protonOut, uint256 minusFee) = boundaryReactor.transmuteNeutronToProton(1e18, user);
+        vm.stopPrank();
+
+        assertEq(neutronOut, 0);
+        assertEq(protonOut, 0);
+        assertEq(plusFee, 0);
+        assertEq(minusFee, 0);
+
+        assertEq(boundaryReactor.PROTON_TOKEN().balanceOf(user), protonBalanceBefore);
+        assertEq(boundaryReactor.NEUTRON_TOKEN().balanceOf(user), neutronBalanceBefore);
+        assertEq(boundaryReactor.PROTON_TOKEN().totalSupply(), protonSupplyBefore);
+        assertEq(boundaryReactor.NEUTRON_TOKEN().totalSupply(), neutronSupplyBefore);
     }
 
     function testBetaPlusRevertsIfResultFallsBelowCriticalRatio() public {
@@ -460,33 +592,44 @@ contract GluonIntegrationTest is Test {
         reactor.fusion(1e18, user);
     }
 
-    function testAdjustPegRevertsBeforeInitialization() public {
-        vm.expectRevert(StableCoinReactor.ReactorNotInitialized.selector);
-        reactor.adjustPeg();
-    }
-
     function testAdjustPegIncreasesAlphaAboveUpperBound() public {
         address user = makeAddr("highRatioUser");
+
         _fundAndFission(user, 100e18);
+        mockFeed.setPrice(2 * 1e8);
 
         uint256 ratioBefore = reactor.reserveRatioPeggedAsset();
         assertGt(ratioBefore, reactor.UPPER_RESERVE_RATIO(), "precondition: ratio should be above 200%");
 
+        uint256 alphaBefore = reactor.alpha();
+        uint256 expectedAlpha = (alphaBefore * reactor.ALPHA_UP_FACTOR()) / 1e18;
+
         vm.expectEmit(false, false, false, true, address(reactor));
-        emit PegAdjusted(1e18, 101e16, ratioBefore);
+        emit PegAdjusted(alphaBefore, expectedAlpha, ratioBefore);
 
         reactor.adjustPeg();
 
         uint256 ratioAfter = reactor.reserveRatioPeggedAsset();
 
-        assertEq(reactor.alpha(), 101e16, "alpha should increase by 1%");
+        assertEq(reactor.alpha(), expectedAlpha, "alpha should increase by 1%");
         assertLt(ratioAfter, ratioBefore, "increasing alpha should decrease reserve ratio");
+    }
+
+    function testAdjustPegDoesNotChangeAlphaAtZeroOraclePrice() public {
+        mockFeed.setPrice(0);
+
+        uint256 alphaBefore = reactor.alpha();
+
+        reactor.adjustPeg();
+
+        assertEq(reactor.alpha(), alphaBefore, "zero oracle price should not change alpha");
+        assertEq(reactor.reserveRatioPeggedAsset(), 0, "zero oracle price should produce zero reserve ratio");
     }
 
     function testAdjustPegDecreasesAlphaBelowCriticalRatio() public {
         address user = makeAddr("lowRatioUser");
-        _fundAndFission(user, 100e18);
 
+        _fundAndFission(user, 100e18);
         mockFeed.setPrice(40_000_000);
 
         uint256 ratioBefore = reactor.reserveRatioPeggedAsset();
@@ -494,17 +637,21 @@ contract GluonIntegrationTest is Test {
             ratioBefore, reactor.CRITICAL_RESERVE_RATIO(), "precondition: ratio should be below critical reserve ratio"
         );
 
+        uint256 alphaBefore = reactor.alpha();
+        uint256 expectedAlpha = (alphaBefore * reactor.ALPHA_DOWN_FACTOR()) / 1e18;
+
         reactor.adjustPeg();
 
         uint256 ratioAfter = reactor.reserveRatioPeggedAsset();
 
-        assertEq(reactor.alpha(), 99e16, "alpha should decrease by 1%");
+        assertEq(reactor.alpha(), expectedAlpha, "alpha should decrease by 1%");
         assertGt(ratioAfter, ratioBefore, "decreasing alpha should increase reserve ratio");
     }
 
     function testRepeatedAdjustPegFromHighRatioReturnsToOperatingRange() public {
         address user = makeAddr("repeatedHighRatioUser");
         _fundAndFission(user, 100e18);
+        mockFeed.setPrice(2 * 1e8);
 
         assertGt(
             reactor.reserveRatioPeggedAsset(),
@@ -562,7 +709,7 @@ contract GluonIntegrationTest is Test {
         address user = makeAddr("validRatioUser");
         _fundAndFission(user, 100e18);
 
-        mockFeed.setPrice(60_000_000);
+        mockFeed.setPrice(90_000_000);
 
         uint256 ratio = reactor.reserveRatioPeggedAsset();
         assertGe(ratio, reactor.CRITICAL_RESERVE_RATIO(), "precondition: ratio below lower bound");
@@ -572,19 +719,32 @@ contract GluonIntegrationTest is Test {
         reactor.adjustPeg();
     }
 
-    function testEmptyReserveRatioDoesNotReadOracle() public {
-        MockFeed badFeed = new MockFeed(0, 8);
-        ChainlinkToOracleAdapter badAdapter = new ChainlinkToOracleAdapter(address(badFeed));
-        StableCoinReactor emptyReactor = _deployReactor(address(badAdapter));
-
-        assertEq(emptyReactor.reserveRatioPeggedAsset(), 0, "empty reactor ratio should not depend on oracle");
-    }
-
-    function testAlphaOnePreservesBootstrapReserveRatio() public {
-        address user = makeAddr("alphaRatioUser");
+    function testQIsDerivedFromReserveRatio() public {
+        address user = makeAddr("qFromRatioUser");
         _fundAndFission(user, 100e18);
 
-        assertEq(reactor.reserveRatioPeggedAsset(), 3e18, "alpha=1 should preserve bootstrap reserve ratio");
+        uint256 ratio = reactor.reserveRatioPeggedAsset();
+        uint256 expectedQ = (1e18 * 1e18) / ratio;
+
+        if (expectedQ > 1e18) expectedQ = 1e18;
+
+        assertEq(reactor.qWad(), expectedQ, "q should be derived from reserve ratio");
+    }
+
+    function testProtonPriceEqualsEquityPerProton() public {
+        address user = makeAddr("equityPriceUser");
+        _fundAndFission(user, 100e18);
+
+        uint256 reserveBalance = reactor.reserve();
+        uint256 neutronSupply = reactor.NEUTRON_TOKEN().totalSupply();
+        uint256 protonSupply = reactor.PROTON_TOKEN().totalSupply();
+        uint256 neutronPrice = reactor.neutronPriceInBase();
+
+        uint256 liabilities = (neutronSupply * neutronPrice) / 1e18;
+        uint256 equity = reserveBalance - liabilities;
+        uint256 expectedProtonPrice = (equity * 1e18) / protonSupply;
+
+        assertEq(reactor.protonPriceInBase(), expectedProtonPrice, "proton price should equal equity per proton");
     }
 
     function testAlphaStartsAtWad() public view {

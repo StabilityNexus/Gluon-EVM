@@ -58,6 +58,7 @@ contract GenericIOracleIntegrationTest is Test {
     GenericMockERC20 internal baseToken;
 
     address internal treasury = makeAddr("treasury");
+    uint256 internal constant INITIAL_RESERVE = 100e18;
 
     function setUp() public {
         factory = new StableCoinFactory();
@@ -143,7 +144,30 @@ contract GenericIOracleIntegrationTest is Test {
         assertGt(balanceAfter, balanceBefore);
     }
 
+    function testZeroOraclePriceHasDefinedPricingBehavior() public {
+        GenericMockOracle oracle = new GenericMockOracle(1e18);
+        StableCoinReactor reactor = _deployReactor(address(oracle));
+
+        address user = makeAddr("zeroPriceUser");
+        _fundAndFission(reactor, user, 100e18);
+
+        oracle.setValue(0);
+
+        uint256 reserveBalance = reactor.reserve();
+        uint256 neutronSupply = reactor.NEUTRON_TOKEN().totalSupply();
+
+        assertEq(reactor.reserveRatioPeggedAsset(), 0);
+        assertEq(reactor.qWad(), 1e18);
+        assertEq(reactor.neutronPriceInBase(), (reserveBalance * 1e18) / neutronSupply);
+        assertEq(reactor.protonPriceInBase(), 0);
+        assertEq(reactor.neutronPriceInPeggedAsset(), 0);
+        assertEq(reactor.protonPriceInPeggedAsset(), 0);
+    }
+
     function _deployReactor(address oracleAddress) internal returns (StableCoinReactor) {
+        baseToken.mint(address(this), INITIAL_RESERVE);
+        baseToken.approve(address(factory), INITIAL_RESERVE);
+
         address reactorAddress = factory.deployReactor(
             "Generic Vault",
             "USD Coin",
@@ -157,7 +181,8 @@ contract GenericIOracleIntegrationTest is Test {
             treasury,
             0,
             0,
-            15e17
+            15e17,
+            INITIAL_RESERVE
         );
 
         return StableCoinReactor(reactorAddress);
@@ -180,6 +205,8 @@ contract GenericIOracleIntegrationTest is Test {
     }
 
     function _fundAndFission(StableCoinReactor reactor, address user, uint256 amount) internal {
+        _adjustIntoOperatingRange(reactor);
+
         baseToken.mint(user, amount);
 
         vm.startPrank(user);

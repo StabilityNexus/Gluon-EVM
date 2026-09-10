@@ -136,7 +136,7 @@ Oracle values are expected in **WAD format**, meaning 18 decimals.
 The `ChainlinkToOracleAdapter`:
 
 - reads the latest Chainlink feed value
-- rejects invalid or non-positive values
+- rejects negative values and allows zero
 - scales the value to 18 decimals
 - exposes the feed description
 - exposes the latest update timestamp
@@ -466,6 +466,13 @@ deployments/sepolia.md
 
 `StableCoinFactory.deployReactor(...)` deploys a new `StableCoinReactor`.
 
+Before deployment, the caller approves the factory to transfer `initialReserve`.
+The reserve and locked Neutron/Proton seed supplies are created during deployment,
+so normal `fission()` does not need a separate bootstrap path. The deployment seed
+is permanent protocol backing: it does not mint user-owned bootstrap tokens and is
+not charged the fission fee. Its split preserves the previous bootstrap economics,
+targeting an initial reserve ratio of `3e18`.
+
 A reactor is configured with:
 
 ```text
@@ -482,6 +489,7 @@ treasury
 fissionFee
 fusionFee
 criticalReserveRatio
+initialReserve
 ```
 
 ### Validation Rules
@@ -494,7 +502,8 @@ The reactor validates that:
 - the treasury address is not zero
 - the fission fee is below `1e18`
 - the fusion fee is below `1e18`
-- the critical reserve ratio is at least `1e18`
+- the critical reserve ratio is at least `1e18` and below the upper reserve ratio
+- the initial reserve is non-zero and can establish a valid initialized reserve state
 - the vault name is not empty
 - the base asset name and symbol are not empty
 - the pegged asset name and symbol are not empty

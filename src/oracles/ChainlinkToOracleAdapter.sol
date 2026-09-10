@@ -28,8 +28,8 @@ contract ChainlinkToOracleAdapter is IOracle {
     // reads chainlink answer and scales to WAD
     function readValue() public view returns (uint256 value) {
         (, int256 answer,,,) = feed.latestRoundData();
-        if (answer <= 0) revert BadValue();
-        // casting is safe because answer > 0
+        if (answer < 0) revert BadValue();
+        // casting is safe because answer >= 0
         // forge-lint: disable-next-line(unsafe-typecast)
         return _scaleToWad(uint256(answer), feed.decimals());
     }
