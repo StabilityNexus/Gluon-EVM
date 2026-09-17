@@ -190,29 +190,30 @@ contract StableCoinReactor is ReentrancyGuard {
         return BASE_TOKEN.balanceOf(address(this));
     }
 
-    function initializeReserve() external {
+    function initialFission() external nonReentrant {
         if (msg.sender != FACTORY) revert OnlyFactory();
         if (NEUTRON_TOKEN.totalSupply() != 0 || PROTON_TOKEN.totalSupply() != 0) revert AlreadyInitialized();
 
-        uint256 reserveBalance = reserve();
-        if (reserveBalance == 0) revert InvalidInitialReserve();
+        uint256 amountIn = reserve();
+        if (amountIn == 0) revert InvalidInitialReserve();
 
-        uint256 initialBasePrice = ORACLE.readValue();
+        uint256 basePriceWad = getBasePriceInPeggedAsset();
 
-        uint256 neutronSeed = Math.mulDiv(reserveBalance, initialBasePrice, INITIAL_RESERVE_RATIO);
-        if (neutronSeed == 0) revert InvalidInitialReserve();
+        uint256 neutronOut = Math.mulDiv(amountIn, basePriceWad, INITIAL_RESERVE_RATIO);
+        if (neutronOut == 0) revert InvalidInitialReserve();
 
-        uint256 initialReserveRatio = _reserveRatioWad(reserveBalance, neutronSeed, initialBasePrice);
+        uint256 initialReserveRatio = _reserveRatioWad(amountIn, neutronOut, basePriceWad);
         if (initialReserveRatio < CRITICAL_RESERVE_RATIO || initialReserveRatio > UPPER_RESERVE_RATIO) {
             revert InvalidInitialReserve();
         }
 
-        uint256 neutronPriceBase = _neutronPriceInBase(reserveBalance, neutronSeed, initialBasePrice);
-        uint256 neutronLiability = Math.mulDiv(neutronSeed, neutronPriceBase, WAD);
-        uint256 protonSeed = reserveBalance - neutronLiability;
+        uint256 neutronPriceBase = _neutronPriceInBase(amountIn, neutronOut, basePriceWad);
+        uint256 neutronLiability = Math.mulDiv(neutronOut, neutronPriceBase, WAD);
+        uint256 protonOut = amountIn - neutronLiability;
+        if (protonOut == 0) revert InvalidInitialReserve();
 
-        NEUTRON_TOKEN.mint(address(this), neutronSeed);
-        PROTON_TOKEN.mint(address(this), protonSeed);
+        NEUTRON_TOKEN.mint(address(this), neutronOut);
+        PROTON_TOKEN.mint(address(this), protonOut);
     }
 
     /// @dev Base/PeggedAsset price (WAD).

@@ -323,13 +323,13 @@ contract GluonIntegrationTest is Test {
         assertEq(nextReactor.reserve(), INITIAL_RESERVE, "next deployment should initialize normally");
     }
 
-    function testReactorInitializationIsFactoryOnlyAndOneTime() public {
+    function testInitialFissionIsFactoryOnlyAndOneTime() public {
         vm.expectRevert(StableCoinReactor.OnlyFactory.selector);
-        reactor.initializeReserve();
+        reactor.initialFission();
 
         vm.expectRevert(StableCoinReactor.AlreadyInitialized.selector);
         vm.prank(address(factory));
-        reactor.initializeReserve();
+        reactor.initialFission();
     }
 
     function testFactoryRejectsZeroOracle() public {
