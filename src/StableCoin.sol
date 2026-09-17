@@ -9,10 +9,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-interface IReactorFactory {
-    function fundInitialReserve(address baseToken, uint256 amount) external;
-}
-
 contract StableCoinReactor is ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Math for uint256;
@@ -20,7 +16,7 @@ contract StableCoinReactor is ReentrancyGuard {
     uint256 public constant WAD = 1e18;
     uint256 public constant PEGGED_ASSET_WAD = 1e18; // peg target
     uint256 public constant UPPER_RESERVE_RATIO = 2e18;
-    uint256 internal constant INITIAL_RESERVE_RATIO = 3e18;
+    uint256 internal constant INITIAL_RESERVE_RATIO = 15e17;
     uint256 public constant ALPHA_DOWN_FACTOR = 99e16;
     uint256 public constant ALPHA_UP_FACTOR = 101e16;
 
@@ -47,6 +43,8 @@ contract StableCoinReactor is ReentrancyGuard {
     error EmptySupply();
     error MathOverflow();
     error InvalidInitialReserve();
+    error OnlyFactory();
+    error AlreadyInitialized();
     error PegAdjustmentNotNeeded();
     error ReserveRatioOutOfRange(uint256 reserveRatio);
     error ResultingReserveRatioBelowCritical();
@@ -66,6 +64,7 @@ contract StableCoinReactor is ReentrancyGuard {
     // Oracle (Adapter)
     IOracle public immutable ORACLE;
 
+    address public immutable FACTORY;
     address public immutable TREASURY;
     uint256 public immutable FISSION_FEE;
     uint256 public immutable FUSION_FEE;
@@ -128,8 +127,7 @@ contract StableCoinReactor is ReentrancyGuard {
         address treasuryParam,
         uint256 fissionFeeParam,
         uint256 fusionFeeParam,
-        uint256 criticalReserveRatioWadParam,
-        uint256 initialReserveParam
+        uint256 criticalReserveRatioWadParam
     ) {
         if (baseTokenParam == address(0)) revert InvalidBaseToken();
         if (oracleParam == address(0)) revert InvalidOracle();
@@ -140,7 +138,6 @@ contract StableCoinReactor is ReentrancyGuard {
         if (criticalReserveRatioWadParam < WAD || criticalReserveRatioWadParam >= UPPER_RESERVE_RATIO) {
             revert InvalidCriticalReserveRatio();
         }
-        if (initialReserveParam == 0) revert InvalidInitialReserve();
         if (bytes(vaultNameParam).length == 0) revert EmptyVaultName();
         if (bytes(baseAssetNameParam).length == 0) revert EmptyBaseName();
         if (bytes(baseAssetSymbolParam).length == 0) revert EmptyBaseSymbol();
@@ -159,30 +156,10 @@ contract StableCoinReactor is ReentrancyGuard {
         ORACLE = IOracle(oracleParam);
         CRITICAL_RESERVE_RATIO = criticalReserveRatioWadParam;
 
-        uint256 reserveBefore = BASE_TOKEN.balanceOf(address(this));
-
-        IReactorFactory(msg.sender).fundInitialReserve(baseTokenParam, initialReserveParam);
-
-        uint256 reserveBalance = BASE_TOKEN.balanceOf(address(this));
-        if (reserveBalance < reserveBefore || reserveBalance - reserveBefore != initialReserveParam) {
-            revert InvalidInitialReserve();
-        }
-
-        uint256 initialBasePrice = ORACLE.readValue();
-
-        uint256 neutronSeed = Math.mulDiv(reserveBalance, initialBasePrice, INITIAL_RESERVE_RATIO);
-        if (neutronSeed == 0) revert InvalidInitialReserve();
-
-        uint256 neutronLiability = Math.mulDiv(neutronSeed, WAD, initialBasePrice);
-        if (neutronLiability == 0 || neutronLiability >= reserveBalance) revert InvalidInitialReserve();
-
-        uint256 protonSeed = reserveBalance - neutronLiability;
+        FACTORY = msg.sender;
 
         NEUTRON_TOKEN = new Tokeon(peggedAssetNameParam, peggedAssetSymbolParam, address(this));
         PROTON_TOKEN = new Tokeon(protonNameParam, protonSymbolParam, address(this));
-
-        NEUTRON_TOKEN.mint(address(this), neutronSeed);
-        PROTON_TOKEN.mint(address(this), protonSeed);
 
         TREASURY = treasuryParam;
         FISSION_FEE = fissionFeeParam;
@@ -211,6 +188,28 @@ contract StableCoinReactor is ReentrancyGuard {
 
     function reserve() public view returns (uint256) {
         return BASE_TOKEN.balanceOf(address(this));
+    }
+
+    function initializeReserve() external {
+        if (msg.sender != FACTORY) revert OnlyFactory();
+        if (NEUTRON_TOKEN.totalSupply() != 0 || PROTON_TOKEN.totalSupply() != 0) revert AlreadyInitialized();
+
+        uint256 reserveBalance = reserve();
+        if (reserveBalance == 0) revert InvalidInitialReserve();
+
+        uint256 initialBasePrice = ORACLE.readValue();
+        if (initialBasePrice == 0) revert InvalidInitialReserve();
+
+        uint256 neutronBacking = Math.mulDiv(reserveBalance, WAD, INITIAL_RESERVE_RATIO);
+        if (neutronBacking == 0) revert InvalidInitialReserve();
+
+        uint256 neutronSeed = Math.mulDiv(reserveBalance, initialBasePrice, INITIAL_RESERVE_RATIO);
+        if (neutronSeed == 0) revert InvalidInitialReserve();
+
+        uint256 protonSeed = reserveBalance - neutronBacking;
+
+        NEUTRON_TOKEN.mint(address(this), neutronSeed);
+        PROTON_TOKEN.mint(address(this), protonSeed);
     }
 
     /// @dev Base/PeggedAsset price (WAD).
