@@ -327,11 +327,12 @@ contract StableCoinReactor is ReentrancyGuard {
         _requireOperatingRange(reserveBefore, neutronSupplyBefore, basePriceWad);
 
         BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
+        uint256 received = reserve() - reserveBefore;
 
-        uint256 feeAmount = Math.mulDiv(amountIn, FISSION_FEE, WAD);
+        uint256 feeAmount = Math.mulDiv(received, FISSION_FEE, WAD);
         if (feeAmount > 0) BASE_TOKEN.safeTransfer(TREASURY, feeAmount);
 
-        uint256 net = amountIn - feeAmount;
+        uint256 net = received - feeAmount;
         if (net == 0) revert AmountTooSmall();
 
         uint256 neutronOut = Math.mulDiv(net, neutronSupplyBefore, reserveBefore);

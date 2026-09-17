@@ -527,6 +527,57 @@ contract GluonIntegrationTest is Test {
         assertEq(StableCoinReactor(reactorAddress).reserve(), receivedReserve, "wrong received reserve");
     }
 
+    function testFissionUsesActualReceivedReserve() public {
+        MockFeeERC20 feeToken = new MockFeeERC20("Fee Token", "FEE");
+        uint256 requestedReserve = 100e18;
+
+        feeToken.mint(address(this), requestedReserve);
+        feeToken.approve(address(factory), requestedReserve);
+
+        StableCoinReactor feeReactor = StableCoinReactor(
+            factory.deployReactor(
+                "Gluon Vault",
+                "Fee Token",
+                "FEE",
+                "Gluon USD",
+                "GUSD",
+                address(feeToken),
+                address(adapter),
+                "Gluon Gov",
+                "GOV",
+                treasury,
+                1e17,
+                0,
+                15e17,
+                requestedReserve
+            )
+        );
+
+        uint256 reserveBefore = feeReactor.reserve();
+        uint256 neutronSupplyBefore = feeReactor.NEUTRON_TOKEN().totalSupply();
+        uint256 protonSupplyBefore = feeReactor.PROTON_TOKEN().totalSupply();
+
+        address user = makeAddr("feeTokenFissionUser");
+        uint256 amountIn = 100e18;
+        uint256 received = 90e18;
+        uint256 expectedFee = 9e18;
+        uint256 net = received - expectedFee;
+
+        uint256 expectedNeutronOut = net * neutronSupplyBefore / reserveBefore;
+        uint256 expectedProtonOut = net * protonSupplyBefore / reserveBefore;
+
+        feeToken.mint(user, amountIn);
+
+        vm.startPrank(user);
+        feeToken.approve(address(feeReactor), amountIn);
+        feeReactor.fission(amountIn, user);
+        vm.stopPrank();
+
+        assertEq(feeReactor.reserve(), reserveBefore + net, "wrong reserve increase");
+        assertEq(feeReactor.NEUTRON_TOKEN().balanceOf(user), expectedNeutronOut, "wrong neutron output");
+        assertEq(feeReactor.PROTON_TOKEN().balanceOf(user), expectedProtonOut, "wrong proton output");
+    }
+
     function testInitializationSeedRemainsAfterUserExit() public {
         address user = makeAddr("seedInvariantUser");
 
