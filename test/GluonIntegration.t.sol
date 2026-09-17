@@ -15,6 +15,25 @@ contract MockERC20 is ERC20 {
     }
 }
 
+contract MockFeeERC20 is ERC20 {
+    constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0)) {
+            uint256 fee = value / 10;
+            super._update(from, address(0), fee);
+            super._update(from, to, value - fee);
+            return;
+        }
+
+        super._update(from, to, value);
+    }
+}
+
 // mock chainlink style feed
 contract MockFeed {
     int256 public price;
@@ -55,6 +74,24 @@ contract GluonIntegrationTest is Test {
     uint256 internal constant INITIAL_RESERVE = 100e18;
 
     event PegAdjusted(uint256 previousAlpha, uint256 newAlpha, uint256 reserveRatio);
+
+    event ReactorDeployed(
+        address indexed reactor,
+        address indexed base,
+        address indexed treasury,
+        string vaultName,
+        string baseAssetName,
+        string baseAssetSymbol,
+        string peggedAssetName,
+        string peggedAssetSymbol,
+        string protonName,
+        string protonSymbol,
+        address oracleAddress,
+        uint256 fissionFee,
+        uint256 fusionFee,
+        uint256 criticalReserveRatioWad,
+        uint256 initialReserve
+    );
 
     function setUp() public {
         baseToken = new MockERC20("USD Coin", "USDC");
@@ -387,6 +424,41 @@ contract GluonIntegrationTest is Test {
         reactor.adjustPeg();
     }
 
+    function testDeploymentRejectsInitialRatioBelowCritical() public {
+        _prepareInitialReserve();
+
+        vm.expectRevert(StableCoinReactor.InvalidInitialReserve.selector);
+        _deployReactorWithCriticalRatio(address(adapter), 16e17);
+    }
+
+    function testDeploymentRejectsRoundedInitialRatioAboveUpperBound() public {
+        MockFeed roundedFeed = new MockFeed(110_000_000, 8);
+        ChainlinkToOracleAdapter roundedAdapter = new ChainlinkToOracleAdapter(address(roundedFeed));
+
+        uint256 tinyReserve = 2;
+        baseToken.mint(address(this), tinyReserve);
+        baseToken.approve(address(factory), tinyReserve);
+
+        vm.expectRevert(StableCoinReactor.InvalidInitialReserve.selector);
+
+        factory.deployReactor(
+            "Gluon Vault",
+            "USD Coin",
+            "USDC",
+            "Gluon USD",
+            "GUSD",
+            address(baseToken),
+            address(roundedAdapter),
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            0,
+            0,
+            15e17,
+            tinyReserve
+        );
+    }
+
     function testDeploymentSeedsTargetReserveRatioAtNonUnitPrice() public {
         MockFeed pricedFeed = new MockFeed(123_456_789, 8);
         ChainlinkToOracleAdapter pricedAdapter = new ChainlinkToOracleAdapter(address(pricedFeed));
@@ -397,12 +469,62 @@ contract GluonIntegrationTest is Test {
 
         uint256 basePrice = pricedAdapter.readValue();
         uint256 expectedNeutronSeed = (INITIAL_RESERVE * basePrice) / 15e17;
-        uint256 neutronBacking = (INITIAL_RESERVE * 1e18) / 15e17;
-        uint256 expectedProtonSeed = INITIAL_RESERVE - neutronBacking;
+        uint256 neutronPriceBase = seededReactor.neutronPriceInBase();
+        uint256 neutronLiability = (expectedNeutronSeed * neutronPriceBase) / 1e18;
+        uint256 expectedProtonSeed = INITIAL_RESERVE - neutronLiability;
 
         assertEq(seededReactor.NEUTRON_TOKEN().totalSupply(), expectedNeutronSeed, "wrong neutron seed");
         assertEq(seededReactor.PROTON_TOKEN().totalSupply(), expectedProtonSeed, "wrong proton seed");
         assertEq(seededReactor.reserveRatioPeggedAsset(), 15e17, "wrong non-unit-price initial ratio");
+        assertEq(seededReactor.protonPriceInBase(), 1e18, "wrong initial proton price");
+    }
+
+    function testFactoryReportsActualReceivedInitialReserve() public {
+        MockFeeERC20 feeToken = new MockFeeERC20("Fee Token", "FEE");
+
+        uint256 requestedReserve = 100e18;
+        uint256 receivedReserve = 90e18;
+
+        feeToken.mint(address(this), requestedReserve);
+        feeToken.approve(address(factory), requestedReserve);
+
+        vm.expectEmit(false, false, false, true, address(factory));
+        emit ReactorDeployed(
+            address(0),
+            address(0),
+            address(0),
+            "Gluon Vault",
+            "Fee Token",
+            "FEE",
+            "Gluon USD",
+            "GUSD",
+            "Gluon Gov",
+            "GOV",
+            address(adapter),
+            0,
+            0,
+            15e17,
+            receivedReserve
+        );
+
+        address reactorAddress = factory.deployReactor(
+            "Gluon Vault",
+            "Fee Token",
+            "FEE",
+            "Gluon USD",
+            "GUSD",
+            address(feeToken),
+            address(adapter),
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            0,
+            0,
+            15e17,
+            requestedReserve
+        );
+
+        assertEq(StableCoinReactor(reactorAddress).reserve(), receivedReserve, "wrong received reserve");
     }
 
     function testInitializationSeedRemainsAfterUserExit() public {

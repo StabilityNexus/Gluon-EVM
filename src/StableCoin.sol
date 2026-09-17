@@ -198,15 +198,18 @@ contract StableCoinReactor is ReentrancyGuard {
         if (reserveBalance == 0) revert InvalidInitialReserve();
 
         uint256 initialBasePrice = ORACLE.readValue();
-        if (initialBasePrice == 0) revert InvalidInitialReserve();
-
-        uint256 neutronBacking = Math.mulDiv(reserveBalance, WAD, INITIAL_RESERVE_RATIO);
-        if (neutronBacking == 0) revert InvalidInitialReserve();
 
         uint256 neutronSeed = Math.mulDiv(reserveBalance, initialBasePrice, INITIAL_RESERVE_RATIO);
         if (neutronSeed == 0) revert InvalidInitialReserve();
 
-        uint256 protonSeed = reserveBalance - neutronBacking;
+        uint256 initialReserveRatio = _reserveRatioWad(reserveBalance, neutronSeed, initialBasePrice);
+        if (initialReserveRatio < CRITICAL_RESERVE_RATIO || initialReserveRatio > UPPER_RESERVE_RATIO) {
+            revert InvalidInitialReserve();
+        }
+
+        uint256 neutronPriceBase = _neutronPriceInBase(reserveBalance, neutronSeed, initialBasePrice);
+        uint256 neutronLiability = Math.mulDiv(neutronSeed, neutronPriceBase, WAD);
+        uint256 protonSeed = reserveBalance - neutronLiability;
 
         NEUTRON_TOKEN.mint(address(this), neutronSeed);
         PROTON_TOKEN.mint(address(this), protonSeed);

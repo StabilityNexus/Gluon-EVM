@@ -101,6 +101,7 @@ contract StableCoinFactory is Ownable {
         address reactorAddress = address(reactor);
 
         IERC20(baseTokenParam).safeTransferFrom(msg.sender, reactorAddress, initialReserveParam);
+        uint256 initialReserve = reactor.reserve();
         reactor.initializeReserve();
 
         deployedReactors.push(reactorAddress);
@@ -121,7 +122,7 @@ contract StableCoinFactory is Ownable {
             fissionFeeParam,
             fusionFeeParam,
             criticalReserveRatioWadParam,
-            initialReserveParam
+            initialReserve
         );
 
         return reactorAddress;
