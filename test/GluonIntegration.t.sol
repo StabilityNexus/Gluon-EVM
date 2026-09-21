@@ -6,6 +6,7 @@ import {StableCoinFactory} from "../src/StableCoinFactory.sol";
 import {StableCoinReactor} from "../src/StableCoin.sol";
 import {ChainlinkToOracleAdapter} from "../src/oracles/ChainlinkToOracleAdapter.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract MockERC20 is ERC20 {
     constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
@@ -704,6 +705,43 @@ contract GluonIntegrationTest is Test {
         assertEq(boundaryReactor.PROTON_TOKEN().balanceOf(user), expectedProtonOut, "wrong proton output at 100% ratio");
 
         assertEq(boundaryReactor.reserveRatioPeggedAsset(), 1e18, "fission should preserve 100% reserve ratio");
+    }
+
+    function testFissionProtonOutputIsProportionalJustAboveCriticalRatio() public {
+        _prepareInitialReserve();
+
+        StableCoinReactor boundaryReactor = _deployReactorWithCriticalRatio(address(adapter), 1e18);
+
+        // Move the oracle price so the live reserve ratio is just above 1e18.
+        // This is a normal reachable state and keeps protonPriceInBase non-zero.
+        mockFeed.setPrice(66_666_667);
+
+        uint256 ratioBefore = boundaryReactor.reserveRatioPeggedAsset();
+
+        assertGt(ratioBefore, 1e18, "ratio should be above critical");
+        assertLe(ratioBefore, boundaryReactor.UPPER_RESERVE_RATIO(), "ratio should be inside operating range");
+        assertGt(boundaryReactor.protonPriceInBase(), 0, "proton price should be nonzero");
+
+        uint256 reserveBefore = boundaryReactor.reserve();
+        uint256 protonSupplyBefore = boundaryReactor.PROTON_TOKEN().totalSupply();
+
+        address user = makeAddr("nearCriticalFissionUser");
+        uint256 amountIn = 1_000_000;
+
+        uint256 expectedProtonOut = Math.mulDiv(amountIn, protonSupplyBefore, reserveBefore);
+
+        baseToken.mint(user, amountIn);
+
+        vm.startPrank(user);
+        baseToken.approve(address(boundaryReactor), amountIn);
+        boundaryReactor.fission(amountIn, user);
+        vm.stopPrank();
+
+        assertEq(
+            boundaryReactor.PROTON_TOKEN().balanceOf(user),
+            expectedProtonOut,
+            "proton output should remain proportional just above critical ratio"
+        );
     }
 
     function testInitializationSeedRemainsAfterUserExit() public {

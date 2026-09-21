@@ -322,15 +322,11 @@ contract StableCoinReactor is ReentrancyGuard {
         returns (uint256 neutronOut, uint256 protonOut)
     {
         uint256 reserveBefore = reserve();
-        uint256 neutronSupplyBefore = NEUTRON_TOKEN.totalSupply();
         uint256 protonSupplyBefore = PROTON_TOKEN.totalSupply();
 
         uint256 basePriceWad = getBasePriceInPeggedAsset();
         uint256 alphaBefore = alpha;
         uint256 neutronPriceBase = _normalizedTargetPriceInBase(basePriceWad);
-        uint256 protonPriceBase =
-            _protonPriceInBase(reserveBefore, protonSupplyBefore, neutronSupplyBefore, basePriceWad);
-
         BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
         uint256 received = reserve() - reserveBefore;
 
@@ -346,10 +342,10 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 neutronLiability = Math.mulDiv(neutronOut, neutronPriceBase, WAD);
         uint256 protonValue = net - neutronLiability;
 
-        if (protonPriceBase == 0) {
-            protonOut = Math.mulDiv(net, protonSupplyBefore, reserveBefore);
+        if (protonSupplyBefore == 0) {
+            protonOut = protonValue;
         } else {
-            protonOut = Math.mulDiv(protonValue, WAD, protonPriceBase);
+            protonOut = Math.mulDiv(net, protonSupplyBefore, reserveBefore);
         }
 
         if (neutronOut == 0 && protonOut == 0) revert AmountTooSmall();
