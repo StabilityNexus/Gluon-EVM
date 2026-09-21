@@ -466,7 +466,7 @@ deployments/sepolia.md
 
 Before deployment, the caller approves the factory to transfer `initialReserve`.
 The factory first receives the reserve from the caller, then approves the newly deployed
-reactor to use the amount actually received. The factory calls `initialFission()`, which
+reactor to use the amount actually received. The factory calls `initialFission(amountIn)`, which
 uses the same internal fission path as normal user fission. The resulting Neutron and
 Proton seed supplies are minted to the reactor itself and remain locked as protocol
 backing. The configured fission fee also applies during this initial fission, and the

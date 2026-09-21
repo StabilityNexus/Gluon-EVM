@@ -357,7 +357,7 @@ contract StableCoinReactor is ReentrancyGuard {
         NEUTRON_TOKEN.mint(to, neutronOut);
         PROTON_TOKEN.mint(to, protonOut);
 
-        emit Fission(msg.sender, to, amountIn, neutronOut, protonOut, feeAmount);
+        emit Fission(msg.sender, to, received, neutronOut, protonOut, feeAmount);
     }
 
     function fusion(uint256 m, address to) external nonReentrant {

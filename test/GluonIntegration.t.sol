@@ -75,6 +75,15 @@ contract GluonIntegrationTest is Test {
 
     event PegAdjusted(uint256 previousAlpha, uint256 newAlpha, uint256 reserveRatio);
 
+    event Fission(
+        address indexed from,
+        address indexed to,
+        uint256 baseIn,
+        uint256 neutronOut,
+        uint256 protonOut,
+        uint256 feeToTreasury
+    );
+
     event ReactorDeployed(
         address indexed reactor,
         address indexed base,
@@ -570,6 +579,10 @@ contract GluonIntegrationTest is Test {
 
         vm.startPrank(user);
         feeToken.approve(address(feeReactor), amountIn);
+
+        vm.expectEmit(true, true, false, true, address(feeReactor));
+        emit Fission(user, user, received, expectedNeutronOut, expectedProtonOut, expectedFee);
+
         feeReactor.fission(amountIn, user);
         vm.stopPrank();
 
