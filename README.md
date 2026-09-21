@@ -465,11 +465,12 @@ deployments/sepolia.md
 `StableCoinFactory.deployReactor(...)` deploys a new `StableCoinReactor`.
 
 Before deployment, the caller approves the factory to transfer `initialReserve`.
-The factory transfers the reserve to the reactor and initializes locked Neutron/Proton
-seed supplies during deployment, so normal `fission()` does not need a separate
-bootstrap path. The deployment seed is permanent protocol backing: it does not mint
-user-owned bootstrap tokens and is not charged the fission fee. The seed targets an
-initial reserve ratio of `15e17`.
+The factory first receives the reserve from the caller, then approves the newly deployed
+reactor to use the amount actually received. The factory calls `initialFission()`, which
+uses the same internal fission path as normal user fission. The resulting Neutron and
+Proton seed supplies are minted to the reactor itself and remain locked as protocol
+backing. The configured fission fee also applies during this initial fission, and the
+seed targets an initial reserve ratio of `15e17`.
 
 A reactor is configured with:
 

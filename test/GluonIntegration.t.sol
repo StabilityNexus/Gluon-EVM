@@ -325,11 +325,11 @@ contract GluonIntegrationTest is Test {
 
     function testInitialFissionIsFactoryOnlyAndOneTime() public {
         vm.expectRevert(StableCoinReactor.OnlyFactory.selector);
-        reactor.initialFission();
+        reactor.initialFission(INITIAL_RESERVE);
 
         vm.expectRevert(StableCoinReactor.AlreadyInitialized.selector);
         vm.prank(address(factory));
-        reactor.initialFission();
+        reactor.initialFission(INITIAL_RESERVE);
     }
 
     function testFactoryRejectsZeroOracle() public {
@@ -483,7 +483,7 @@ contract GluonIntegrationTest is Test {
         MockFeeERC20 feeToken = new MockFeeERC20("Fee Token", "FEE");
 
         uint256 requestedReserve = 100e18;
-        uint256 receivedReserve = 90e18;
+        uint256 receivedReserve = 81e18;
 
         feeToken.mint(address(this), requestedReserve);
         feeToken.approve(address(factory), requestedReserve);
@@ -576,6 +576,121 @@ contract GluonIntegrationTest is Test {
         assertEq(feeReactor.reserve(), reserveBefore + net, "wrong reserve increase");
         assertEq(feeReactor.NEUTRON_TOKEN().balanceOf(user), expectedNeutronOut, "wrong neutron output");
         assertEq(feeReactor.PROTON_TOKEN().balanceOf(user), expectedProtonOut, "wrong proton output");
+    }
+
+    function testInitialFissionUsesConfiguredFissionFee() public {
+        _prepareInitialReserve();
+
+        uint256 treasuryBefore = baseToken.balanceOf(treasury);
+
+        StableCoinReactor feeReactor = StableCoinReactor(
+            factory.deployReactor(
+                "Fee Seed Vault",
+                "USD Coin",
+                "USDC",
+                "Gluon USD",
+                "GUSD",
+                address(baseToken),
+                address(adapter),
+                "Gluon Gov",
+                "GOV",
+                treasury,
+                1e17,
+                0,
+                15e17,
+                INITIAL_RESERVE
+            )
+        );
+
+        uint256 expectedFee = 10e18;
+        uint256 expectedReserve = INITIAL_RESERVE - expectedFee;
+
+        assertEq(baseToken.balanceOf(treasury), treasuryBefore + expectedFee, "wrong initial fission fee");
+        assertEq(feeReactor.reserve(), expectedReserve, "wrong reserve after initial fission fee");
+        assertEq(feeReactor.reserveRatioPeggedAsset(), 15e17, "initial ratio changed after fee");
+    }
+
+    function testFissionAfterAlphaAdjustmentKeepsProportionalAccounting() public {
+        address firstUser = makeAddr("alphaSetupUser");
+        _fundAndFission(firstUser, 100e18);
+
+        mockFeed.setPrice(2e8);
+        _adjustIntoOperatingRange();
+
+        assertGt(reactor.alpha(), 1e18, "precondition: alpha should be above one");
+
+        uint256 ratioBefore = reactor.reserveRatioPeggedAsset();
+        uint256 reserveBefore = reactor.reserve();
+        uint256 neutronSupplyBefore = reactor.NEUTRON_TOKEN().totalSupply();
+        uint256 protonSupplyBefore = reactor.PROTON_TOKEN().totalSupply();
+
+        address user = makeAddr("alphaFissionUser");
+        uint256 amountIn = 17e18;
+
+        uint256 expectedNeutronOut = amountIn * neutronSupplyBefore / reserveBefore;
+        uint256 expectedProtonOut = amountIn * protonSupplyBefore / reserveBefore;
+
+        baseToken.mint(user, amountIn);
+
+        vm.startPrank(user);
+        baseToken.approve(address(reactor), amountIn);
+        reactor.fission(amountIn, user);
+        vm.stopPrank();
+
+        assertApproxEqAbs(
+            reactor.NEUTRON_TOKEN().balanceOf(user),
+            expectedNeutronOut,
+            100,
+            "wrong neutron output after alpha adjustment"
+        );
+
+        assertApproxEqAbs(
+            reactor.PROTON_TOKEN().balanceOf(user), expectedProtonOut, 100, "wrong proton output after alpha adjustment"
+        );
+
+        assertApproxEqAbs(reactor.reserveRatioPeggedAsset(), ratioBefore, 100, "fission should preserve reserve ratio");
+    }
+
+    function testFissionAtOneReserveRatioKeepsProtonProportional() public {
+        _prepareInitialReserve();
+
+        StableCoinReactor boundaryReactor = _deployReactorWithCriticalRatio(address(adapter), 1e18);
+
+        uint256 neutronSupplyBefore = boundaryReactor.NEUTRON_TOKEN().totalSupply();
+        uint256 protonSupplyBefore = boundaryReactor.PROTON_TOKEN().totalSupply();
+
+        uint256 reserveToRemove = boundaryReactor.reserve() - neutronSupplyBefore;
+
+        vm.prank(address(boundaryReactor));
+        assertTrue(baseToken.transfer(makeAddr("oneRatioReserveSink"), reserveToRemove), "reserve transfer failed");
+
+        assertEq(boundaryReactor.reserveRatioPeggedAsset(), 1e18, "precondition: reserve ratio should equal one");
+
+        assertEq(boundaryReactor.protonPriceInBase(), 0, "precondition: proton price should be zero");
+
+        uint256 reserveBefore = boundaryReactor.reserve();
+
+        address user = makeAddr("oneRatioFissionUser");
+        uint256 amountIn = 10e18;
+
+        uint256 expectedNeutronOut = amountIn * neutronSupplyBefore / reserveBefore;
+
+        uint256 expectedProtonOut = amountIn * protonSupplyBefore / reserveBefore;
+
+        baseToken.mint(user, amountIn);
+
+        vm.startPrank(user);
+        baseToken.approve(address(boundaryReactor), amountIn);
+        boundaryReactor.fission(amountIn, user);
+        vm.stopPrank();
+
+        assertEq(
+            boundaryReactor.NEUTRON_TOKEN().balanceOf(user), expectedNeutronOut, "wrong neutron output at 100% ratio"
+        );
+
+        assertEq(boundaryReactor.PROTON_TOKEN().balanceOf(user), expectedProtonOut, "wrong proton output at 100% ratio");
+
+        assertEq(boundaryReactor.reserveRatioPeggedAsset(), 1e18, "fission should preserve 100% reserve ratio");
     }
 
     function testInitializationSeedRemainsAfterUserExit() public {

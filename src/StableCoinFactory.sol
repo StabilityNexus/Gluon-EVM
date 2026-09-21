@@ -100,9 +100,18 @@ contract StableCoinFactory is Ownable {
 
         address reactorAddress = address(reactor);
 
-        IERC20(baseTokenParam).safeTransferFrom(msg.sender, reactorAddress, initialReserveParam);
+        IERC20 baseToken = IERC20(baseTokenParam);
+        uint256 factoryBalanceBefore = baseToken.balanceOf(address(this));
+
+        baseToken.safeTransferFrom(msg.sender, address(this), initialReserveParam);
+
+        uint256 amountIn = baseToken.balanceOf(address(this)) - factoryBalanceBefore;
+        if (amountIn == 0) revert InvalidInitialReserve();
+
+        baseToken.forceApprove(reactorAddress, amountIn);
+        reactor.initialFission(amountIn);
+
         uint256 initialReserve = reactor.reserve();
-        reactor.initialFission();
 
         deployedReactors.push(reactorAddress);
         reactorsByBase[baseTokenParam].push(reactorAddress);
