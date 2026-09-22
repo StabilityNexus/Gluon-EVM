@@ -404,6 +404,26 @@ contract GluonIntegrationTest is Test {
         );
     }
 
+    function testDeploymentAccountsForPrefundedReactorAddress() public {
+        uint256 factoryNonce = vm.getNonce(address(factory));
+        address predictedReactor = vm.computeCreateAddress(address(factory), factoryNonce);
+
+        uint256 prefundedAmount = 50e18;
+        baseToken.mint(predictedReactor, prefundedAmount);
+
+        _prepareInitialReserve();
+
+        StableCoinReactor prefundedReactor = _deployReactorWithCriticalRatio(address(adapter), 15e17);
+
+        assertEq(address(prefundedReactor), predictedReactor, "unexpected reactor address");
+
+        assertEq(prefundedReactor.reserve(), INITIAL_RESERVE + prefundedAmount, "prefunded reserve should be included");
+
+        assertEq(
+            prefundedReactor.reserveRatioPeggedAsset(), 15e17, "prefunded reserve should be included in seed accounting"
+        );
+    }
+
     function testDeploymentInitializesReserveAndLockedSupply() public view {
         uint256 neutronSupply = reactor.NEUTRON_TOKEN().totalSupply();
         uint256 protonSupply = reactor.PROTON_TOKEN().totalSupply();

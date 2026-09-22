@@ -195,9 +195,7 @@ contract StableCoinReactor is ReentrancyGuard {
         if (NEUTRON_TOKEN.totalSupply() != 0 || PROTON_TOKEN.totalSupply() != 0) revert AlreadyInitialized();
         if (amountIn == 0) revert InvalidInitialReserve();
 
-        uint256 reserveBefore = reserve();
-        (uint256 neutronOut, uint256 protonOut) =
-            fissionAux(amountIn, address(this), INITIAL_RESERVE_RATIO, reserveBefore);
+        (uint256 neutronOut, uint256 protonOut) = fissionAux(amountIn, address(this), INITIAL_RESERVE_RATIO, 0);
 
         if (neutronOut == 0 || protonOut == 0) revert InvalidInitialReserve();
 
@@ -316,7 +314,7 @@ contract StableCoinReactor is ReentrancyGuard {
         fissionAux(amountIn, to, reserveRatio, reserveBefore);
     }
 
-    function fissionAux(uint256 amountIn, address to, uint256 reserveRatio, uint256 reserveBefore)
+    function fissionAux(uint256 amountIn, address to, uint256 reserveRatio, uint256 reserveBaseline)
         internal
         returns (uint256 neutronOut, uint256 protonOut)
     {
@@ -326,7 +324,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 alphaBefore = alpha;
         uint256 neutronPriceBase = _normalizedTargetPriceInBase(basePriceWad);
         BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
-        uint256 received = reserve() - reserveBefore;
+        uint256 received = reserve() - reserveBaseline;
 
         uint256 feeAmount = Math.mulDiv(received, FISSION_FEE, WAD);
         if (feeAmount > 0) BASE_TOKEN.safeTransfer(TREASURY, feeAmount);
@@ -343,7 +341,7 @@ contract StableCoinReactor is ReentrancyGuard {
         if (protonSupplyBefore == 0) {
             protonOut = protonValue;
         } else {
-            protonOut = Math.mulDiv(net, protonSupplyBefore, reserveBefore);
+            protonOut = Math.mulDiv(net, protonSupplyBefore, reserveBaseline);
         }
 
         if (neutronOut == 0 && protonOut == 0) revert AmountTooSmall();
