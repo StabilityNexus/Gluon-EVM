@@ -96,9 +96,7 @@ The reactor:
 3. calculates the Proton and Neutron outputs
 4. mints both assets to the selected recipient
 
-For the first deposit, the reactor bootstraps the initial Proton and Neutron split using the oracle price.
-
-For later deposits, the output is calculated proportionally using the existing reserve and token supplies.
+Every user fission calculates the output proportionally using the existing reserve and token supplies, which are initialized during reactor deployment.
 
 ### Fusion
 
@@ -136,7 +134,7 @@ Oracle values are expected in **WAD format**, meaning 18 decimals.
 The `ChainlinkToOracleAdapter`:
 
 - reads the latest Chainlink feed value
-- rejects invalid or non-positive values
+- rejects negative values and allows zero
 - scales the value to 18 decimals
 - exposes the feed description
 - exposes the latest update timestamp
@@ -466,6 +464,14 @@ deployments/sepolia.md
 
 `StableCoinFactory.deployReactor(...)` deploys a new `StableCoinReactor`.
 
+Before deployment, the caller approves the factory to transfer `initialReserve`.
+The factory first receives the reserve from the caller, then approves the newly deployed
+reactor to use the amount actually received. The factory calls `initialFission(amountIn)`, which
+uses the same internal fission path as normal user fission. The resulting Neutron and
+Proton seed supplies are minted to the reactor itself and remain locked as protocol
+backing. The configured fission fee also applies during this initial fission, and the
+seed targets an initial reserve ratio of `15e17`.
+
 A reactor is configured with:
 
 ```text
@@ -482,6 +488,7 @@ treasury
 fissionFee
 fusionFee
 criticalReserveRatio
+initialReserve
 ```
 
 ### Validation Rules
@@ -494,7 +501,8 @@ The reactor validates that:
 - the treasury address is not zero
 - the fission fee is below `1e18`
 - the fusion fee is below `1e18`
-- the critical reserve ratio is at least `1e18`
+- the critical reserve ratio is at least `1e18` and below the upper reserve ratio
+- the initial reserve is non-zero and can establish a valid initialized reserve state
 - the vault name is not empty
 - the base asset name and symbol are not empty
 - the pegged asset name and symbol are not empty

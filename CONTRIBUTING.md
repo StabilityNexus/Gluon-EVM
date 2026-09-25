@@ -744,7 +744,8 @@ Oracle implementations and adapters should:
 
 - return unsigned values
 - normalize values to 18-decimal WAD format
-- reject invalid or non-positive prices
+- reject invalid prices and negative values where the source type permits them
+- define and test behavior for zero prices
 - expose value intervals through `readValueInterval()`
 - expose the latest update timestamp through `lastUpdated()`
 - expose a meaningful description

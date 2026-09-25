@@ -3,8 +3,12 @@ pragma solidity ^0.8.20;
 
 import {StableCoinReactor} from "./StableCoin.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract StableCoinFactory is Ownable {
+    using SafeERC20 for IERC20;
+
     event ReactorDeployed(
         address indexed reactor,
         address indexed base,
@@ -19,7 +23,8 @@ contract StableCoinFactory is Ownable {
         address oracleAddress,
         uint256 fissionFee,
         uint256 fusionFee,
-        uint256 criticalReserveRatioWad
+        uint256 criticalReserveRatioWad,
+        uint256 initialReserve
     );
 
     address[] public deployedReactors;
@@ -38,6 +43,7 @@ contract StableCoinFactory is Ownable {
     error InvalidFissionFee();
     error InvalidFusionFee();
     error InvalidCriticalReserveRatio();
+    error InvalidInitialReserve();
 
     constructor() Ownable(msg.sender) {}
 
@@ -58,7 +64,8 @@ contract StableCoinFactory is Ownable {
         address treasuryParam,
         uint256 fissionFeeParam,
         uint256 fusionFeeParam,
-        uint256 criticalReserveRatioWadParam
+        uint256 criticalReserveRatioWadParam,
+        uint256 initialReserveParam
     ) public returns (address) {
         if (bytes(vaultNameParam).length == 0) revert EmptyVaultName();
         if (bytes(baseAssetNameParam).length == 0) revert EmptyBaseName();
@@ -73,6 +80,7 @@ contract StableCoinFactory is Ownable {
         if (fissionFeeParam >= 1e18) revert InvalidFissionFee();
         if (fusionFeeParam >= 1e18) revert InvalidFusionFee();
         if (criticalReserveRatioWadParam < 1e18) revert InvalidCriticalReserveRatio();
+        if (initialReserveParam == 0) revert InvalidInitialReserve();
 
         StableCoinReactor reactor = new StableCoinReactor(
             vaultNameParam,
@@ -91,6 +99,20 @@ contract StableCoinFactory is Ownable {
         );
 
         address reactorAddress = address(reactor);
+
+        IERC20 baseToken = IERC20(baseTokenParam);
+        uint256 factoryBalanceBefore = baseToken.balanceOf(address(this));
+
+        baseToken.safeTransferFrom(msg.sender, address(this), initialReserveParam);
+
+        uint256 amountIn = baseToken.balanceOf(address(this)) - factoryBalanceBefore;
+        if (amountIn == 0) revert InvalidInitialReserve();
+
+        baseToken.forceApprove(reactorAddress, amountIn);
+        reactor.initialFission(amountIn);
+
+        uint256 initialReserve = reactor.reserve();
+
         deployedReactors.push(reactorAddress);
         reactorsByBase[baseTokenParam].push(reactorAddress);
 
@@ -108,7 +130,8 @@ contract StableCoinFactory is Ownable {
             oracleParam,
             fissionFeeParam,
             fusionFeeParam,
-            criticalReserveRatioWadParam
+            criticalReserveRatioWadParam,
+            initialReserve
         );
 
         return reactorAddress;
