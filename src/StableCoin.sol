@@ -195,7 +195,9 @@ contract StableCoinReactor is ReentrancyGuard {
         if (NEUTRON_TOKEN.totalSupply() != 0 || PROTON_TOKEN.totalSupply() != 0) revert AlreadyInitialized();
         if (amountIn == 0) revert InvalidInitialReserve();
 
-        (uint256 neutronOut, uint256 protonOut) = fissionAux(amountIn, address(this), INITIAL_RESERVE_RATIO, 0);
+        uint256 basePriceWad = getBasePriceInPeggedAsset();
+        (uint256 neutronOut, uint256 protonOut) =
+            fissionAux(amountIn, address(this), INITIAL_RESERVE_RATIO, 0, basePriceWad);
 
         if (neutronOut == 0 || protonOut == 0) revert InvalidInitialReserve();
 
@@ -311,18 +313,25 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 reserveRatio = _reserveRatioWad(reserveBefore, neutronSupplyBefore, basePriceWad);
         _requireOperatingRange(reserveRatio);
 
-        fissionAux(amountIn, to, reserveRatio, reserveBefore);
+        fissionAux(amountIn, to, reserveRatio, reserveBefore, basePriceWad);
     }
 
-    function fissionAux(uint256 amountIn, address to, uint256 reserveRatio, uint256 reserveBaseline)
-        internal
-        returns (uint256 neutronOut, uint256 protonOut)
-    {
+    function fissionAux(
+        uint256 amountIn,
+        address to,
+        uint256 reserveRatio,
+        uint256 reserveBaseline,
+        uint256 basePriceWad
+    ) internal returns (uint256 neutronOut, uint256 protonOut) {
         uint256 protonSupplyBefore = PROTON_TOKEN.totalSupply();
 
-        uint256 basePriceWad = getBasePriceInPeggedAsset();
+        // Snapshot alpha before the token transfer so the outputs use the same pre-transfer state.
         uint256 alphaBefore = alpha;
-        uint256 neutronPriceBase = _normalizedTargetPriceInBase(basePriceWad);
+        uint256 neutronPriceBase;
+        if (protonSupplyBefore == 0) {
+            neutronPriceBase = _normalizedTargetPriceInBase(basePriceWad);
+        }
+
         BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
         uint256 received = reserve() - reserveBaseline;
 
@@ -335,11 +344,9 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 adjustedBasePrice = Math.mulDiv(basePriceWad, WAD, alphaBefore);
         neutronOut = Math.mulDiv(net, adjustedBasePrice, reserveRatio);
 
-        uint256 neutronLiability = Math.mulDiv(neutronOut, neutronPriceBase, WAD);
-        uint256 protonValue = net - neutronLiability;
-
         if (protonSupplyBefore == 0) {
-            protonOut = protonValue;
+            uint256 neutronLiability = Math.mulDiv(neutronOut, neutronPriceBase, WAD);
+            protonOut = net - neutronLiability;
         } else {
             protonOut = Math.mulDiv(net, protonSupplyBefore, reserveBaseline);
         }
