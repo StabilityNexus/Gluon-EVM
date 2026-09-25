@@ -222,7 +222,7 @@ contract StableCoinReactor is ReentrancyGuard {
 
         if (neutronOut == 0 || protonOut == 0) revert InvalidInitialReserve();
 
-        uint256 initialReserveRatio = _reserveRatioWad(_baseToWad(reserve()), NEUTRON_TOKEN.totalSupply(), basePriceWad);
+        uint256 initialReserveRatio = _reserveRatioWad(_baseToWad(reserve()), neutronOut, basePriceWad);
         if (initialReserveRatio < CRITICAL_RESERVE_RATIO || initialReserveRatio > UPPER_RESERVE_RATIO) {
             revert InvalidInitialReserve();
         }
@@ -279,9 +279,9 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 basePrice = getBasePriceInPeggedAsset();
         uint256 reserveWad = _baseToWad(reserve());
         uint256 neutronSupply = NEUTRON_TOKEN.totalSupply();
-        uint256 neutronPriceBase = _neutronPriceInBase(reserveWad, neutronSupply, basePrice);
+        (, uint256 protonPriceBase) = _pricesInBase(reserveWad, PROTON_TOKEN.totalSupply(), neutronSupply, basePrice);
 
-        return _protonPriceInBase(reserveWad, PROTON_TOKEN.totalSupply(), neutronSupply, neutronPriceBase);
+        return protonPriceBase;
     }
 
     function neutronPriceInPeggedAsset() external view returns (uint256) {
@@ -294,8 +294,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 basePrice = getBasePriceInPeggedAsset();
         uint256 reserveWad = _baseToWad(reserve());
         uint256 neutronSupply = NEUTRON_TOKEN.totalSupply();
-        uint256 neutronPriceBase = _neutronPriceInBase(reserveWad, neutronSupply, basePrice);
-        uint256 protonBase = _protonPriceInBase(reserveWad, PROTON_TOKEN.totalSupply(), neutronSupply, neutronPriceBase);
+        (, uint256 protonBase) = _pricesInBase(reserveWad, PROTON_TOKEN.totalSupply(), neutronSupply, basePrice);
 
         return Math.mulDiv(protonBase, basePrice, WAD);
     }
@@ -353,7 +352,8 @@ contract StableCoinReactor is ReentrancyGuard {
     ) internal returns (uint256 neutronOut, uint256 protonOut) {
         uint256 protonSupplyBefore = PROTON_TOKEN.totalSupply();
 
-        // Snapshot alpha before the token transfer so the outputs use the same pre-transfer state.
+        // adjustPeg() is not nonReentrant, so a hook-bearing base token could change alpha
+        // during the transfer below. Keep the mint calculation on one pre-transfer alpha snapshot.
         uint256 alphaBefore = alpha;
         uint256 neutronPriceBase;
         if (protonSupplyBefore == 0) {
@@ -396,7 +396,6 @@ contract StableCoinReactor is ReentrancyGuard {
 
         uint256 reserveBalanceWad = _baseToWad(reserveBalanceRaw);
         uint256 baseOutWad = _baseToWad(m);
-        if (baseOutWad == 0) revert AmountTooSmall();
 
         uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
         uint256 protonSupplyTotal = PROTON_TOKEN.totalSupply();
@@ -486,9 +485,8 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 reserveRatio = _reserveRatioWad(reserveWad, neutronSupplyCached, basePrice);
         _requireOperatingRange(reserveRatio);
 
-        uint256 neutronPriceBase = _neutronPriceInBase(reserveWad, neutronSupplyCached, basePrice);
-        uint256 protonPriceBase =
-            _protonPriceInBase(reserveWad, protonSupplyCached, neutronSupplyCached, neutronPriceBase);
+        (uint256 neutronPriceBase, uint256 protonPriceBase) =
+            _pricesInBase(reserveWad, protonSupplyCached, neutronSupplyCached, basePrice);
 
         if (protonPriceBase == 0 || neutronPriceBase == 0) return (0, 0);
 
@@ -535,9 +533,8 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 reserveRatio = _reserveRatioWad(reserveWad, neutronSupplyCached, basePrice);
         _requireOperatingRange(reserveRatio);
 
-        uint256 neutronPriceBase = _neutronPriceInBase(reserveWad, neutronSupplyCached, basePrice);
-        uint256 protonPriceBase =
-            _protonPriceInBase(reserveWad, protonSupplyCached, neutronSupplyCached, neutronPriceBase);
+        (uint256 neutronPriceBase, uint256 protonPriceBase) =
+            _pricesInBase(reserveWad, protonSupplyCached, neutronSupplyCached, basePrice);
 
         if (protonPriceBase == 0 || neutronPriceBase == 0) return (0, 0);
 
@@ -569,6 +566,16 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 reservePerNeutron = Math.mulDiv(reserveWad, WAD, neutronSupplyTokens);
 
         return targetPriceBase < reservePerNeutron ? targetPriceBase : reservePerNeutron;
+    }
+
+    function _pricesInBase(
+        uint256 reserveWad,
+        uint256 protonSupplyTokens,
+        uint256 neutronSupplyTokens,
+        uint256 basePriceWad
+    ) internal view returns (uint256 neutronPriceBase, uint256 protonPriceBase) {
+        neutronPriceBase = _neutronPriceInBase(reserveWad, neutronSupplyTokens, basePriceWad);
+        protonPriceBase = _protonPriceInBase(reserveWad, protonSupplyTokens, neutronSupplyTokens, neutronPriceBase);
     }
 
     function _protonPriceInBase(
