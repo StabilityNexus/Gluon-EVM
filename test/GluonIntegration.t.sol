@@ -16,6 +16,22 @@ contract MockERC20 is ERC20 {
     }
 }
 
+contract MockDecimalERC20 is ERC20 {
+    uint8 private immutable tokenDecimals;
+
+    constructor(string memory name_, string memory symbol_, uint8 decimals_) ERC20(name_, symbol_) {
+        tokenDecimals = decimals_;
+    }
+
+    function decimals() public view override returns (uint8) {
+        return tokenDecimals;
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+}
+
 contract MockFeeERC20 is ERC20 {
     constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
 
@@ -149,6 +165,43 @@ contract GluonIntegrationTest is Test {
         return StableCoinReactor(reactorAddr);
     }
 
+    function _deployDecimalReactor(uint8 decimals_, uint256 initialReserve)
+        internal
+        returns (MockDecimalERC20 decimalToken, StableCoinReactor decimalReactor)
+    {
+        decimalToken = new MockDecimalERC20("USD Coin", "USDC", decimals_);
+        StableCoinFactory decimalFactory = new StableCoinFactory();
+
+        decimalToken.mint(address(this), initialReserve);
+        decimalToken.approve(address(decimalFactory), initialReserve);
+
+        address reactorAddress = decimalFactory.deployReactor(
+            "Decimal Vault",
+            "USD Coin",
+            "USDC",
+            "Gluon USD",
+            "GUSD",
+            address(decimalToken),
+            address(adapter),
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            0,
+            0,
+            15e17,
+            initialReserve
+        );
+
+        decimalReactor = StableCoinReactor(reactorAddress);
+    }
+
+    function _deploySixDecimalReactor()
+        internal
+        returns (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor)
+    {
+        return _deployDecimalReactor(6, 100e6);
+    }
+
     function _fundAndFission(address user, uint256 amount) internal {
         _adjustIntoOperatingRange();
 
@@ -190,6 +243,360 @@ contract GluonIntegrationTest is Test {
 
         assertTrue(neutronBal > 0, "Neutron tokens not minted");
         assertTrue(protonBal > 0, "Proton tokens not minted");
+    }
+
+    function testZeroDecimalReserveMatchesEighteenDecimalFissionAndFusion() public {
+        (MockDecimalERC20 zeroDecimalToken, StableCoinReactor zeroDecimalReactor) = _deployDecimalReactor(0, 100);
+
+        address user18 = makeAddr("zeroDecimal18User");
+        address user0 = makeAddr("zeroDecimalUser");
+
+        assertEq(
+            zeroDecimalReactor.NEUTRON_TOKEN().totalSupply(),
+            reactor.NEUTRON_TOKEN().totalSupply(),
+            "zero-decimal neutron seed should match"
+        );
+        assertEq(
+            zeroDecimalReactor.PROTON_TOKEN().totalSupply(),
+            reactor.PROTON_TOKEN().totalSupply(),
+            "zero-decimal proton seed should match"
+        );
+        assertEq(
+            zeroDecimalReactor.reserveRatioPeggedAsset(),
+            reactor.reserveRatioPeggedAsset(),
+            "zero-decimal initial ratio should match"
+        );
+
+        baseToken.mint(user18, 25e18);
+        zeroDecimalToken.mint(user0, 25);
+
+        vm.startPrank(user18);
+        baseToken.approve(address(reactor), 25e18);
+        reactor.fission(25e18, user18);
+        vm.stopPrank();
+
+        vm.startPrank(user0);
+        zeroDecimalToken.approve(address(zeroDecimalReactor), 25);
+        zeroDecimalReactor.fission(25, user0);
+        vm.stopPrank();
+
+        assertEq(
+            zeroDecimalReactor.NEUTRON_TOKEN().balanceOf(user0),
+            reactor.NEUTRON_TOKEN().balanceOf(user18),
+            "zero-decimal fission neutron output should match"
+        );
+        assertEq(
+            zeroDecimalReactor.PROTON_TOKEN().balanceOf(user0),
+            reactor.PROTON_TOKEN().balanceOf(user18),
+            "zero-decimal fission proton output should match"
+        );
+
+        vm.prank(user18);
+        reactor.fusion(10e18, user18);
+
+        vm.prank(user0);
+        zeroDecimalReactor.fusion(10, user0);
+
+        assertEq(baseToken.balanceOf(user18), 10e18, "wrong 18-decimal fusion output");
+        assertEq(zeroDecimalToken.balanceOf(user0), 10, "wrong zero-decimal fusion output");
+
+        assertEq(
+            zeroDecimalReactor.NEUTRON_TOKEN().balanceOf(user0),
+            reactor.NEUTRON_TOKEN().balanceOf(user18),
+            "zero-decimal post-fusion neutron balance should match"
+        );
+        assertEq(
+            zeroDecimalReactor.PROTON_TOKEN().balanceOf(user0),
+            reactor.PROTON_TOKEN().balanceOf(user18),
+            "zero-decimal post-fusion proton balance should match"
+        );
+        assertEq(
+            zeroDecimalReactor.reserveRatioPeggedAsset(),
+            reactor.reserveRatioPeggedAsset(),
+            "zero-decimal post-fusion ratio should match"
+        );
+    }
+
+    function testSixDecimalDynamicBetaFeeMatchesEighteenDecimal() public {
+        (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor) = _deploySixDecimalReactor();
+
+        address user18 = makeAddr("dynamicBeta18User");
+        address user6 = makeAddr("dynamicBeta6User");
+
+        baseToken.mint(user18, 100e18);
+        sixDecimalToken.mint(user6, 100e6);
+
+        vm.startPrank(user18);
+        baseToken.approve(address(reactor), 100e18);
+        reactor.fission(100e18, user18);
+        vm.stopPrank();
+
+        vm.startPrank(user6);
+        sixDecimalToken.approve(address(sixDecimalReactor), 100e6);
+        sixDecimalReactor.fission(100e6, user6);
+        vm.stopPrank();
+
+        mockFeed.setPrice(120_000_000);
+
+        vm.prank(treasury);
+        reactor.setBetaParams(0, 5e17, 1e18);
+
+        vm.prank(treasury);
+        sixDecimalReactor.setBetaParams(0, 5e17, 1e18);
+
+        // First beta+ establishes the same positive volume ledger in both reactors.
+        vm.prank(user18);
+        (uint256 firstOut18, uint256 firstFee18) = reactor.transmuteProtonToNeutron(1e18, user18);
+
+        vm.prank(user6);
+        (uint256 firstOut6, uint256 firstFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, user6);
+
+        assertEq(firstFee18, 0, "first beta+ fee should start at zero");
+        assertEq(firstFee6, firstFee18, "first beta+ fee should match");
+        assertEq(firstOut6, firstOut18, "first beta+ output should match");
+
+        // The second beta+ exercises phi1 * decayedVolumeBase / reserveWad.
+        vm.prank(user18);
+        (uint256 secondOut18, uint256 secondFee18) = reactor.transmuteProtonToNeutron(1e18, user18);
+
+        vm.prank(user6);
+        (uint256 secondOut6, uint256 secondFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, user6);
+
+        assertGt(secondFee18, 0, "dynamic beta fee should be nonzero");
+        assertEq(secondFee6, secondFee18, "dynamic beta fee should be decimal-independent");
+        assertEq(secondOut6, secondOut18, "dynamic beta output should be decimal-independent");
+    }
+
+    function testSixDecimalReserveMatchesEighteenDecimalInitialization() public {
+        (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor) = _deploySixDecimalReactor();
+
+        assertEq(sixDecimalReactor.reserve(), 100e6, "wrong native six-decimal reserve");
+        assertEq(sixDecimalToken.balanceOf(address(sixDecimalReactor)), 100e6);
+
+        assertEq(
+            sixDecimalReactor.NEUTRON_TOKEN().totalSupply(),
+            reactor.NEUTRON_TOKEN().totalSupply(),
+            "neutron seed should be decimal-independent"
+        );
+
+        assertEq(
+            sixDecimalReactor.PROTON_TOKEN().totalSupply(),
+            reactor.PROTON_TOKEN().totalSupply(),
+            "proton seed should be decimal-independent"
+        );
+
+        assertEq(
+            sixDecimalReactor.reserveRatioPeggedAsset(),
+            reactor.reserveRatioPeggedAsset(),
+            "reserve ratio should be decimal-independent"
+        );
+
+        assertEq(
+            sixDecimalReactor.neutronPriceInBase(),
+            reactor.neutronPriceInBase(),
+            "neutron price should be decimal-independent"
+        );
+
+        assertEq(
+            sixDecimalReactor.protonPriceInBase(),
+            reactor.protonPriceInBase(),
+            "proton price should be decimal-independent"
+        );
+    }
+
+    function testSixDecimalReserveMatchesEighteenDecimalFissionAndFusion() public {
+        (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor) = _deploySixDecimalReactor();
+
+        address user18 = makeAddr("decimal18User");
+        address user6 = makeAddr("decimal6User");
+
+        baseToken.mint(user18, 25e18);
+        sixDecimalToken.mint(user6, 25e6);
+
+        vm.startPrank(user18);
+        baseToken.approve(address(reactor), 25e18);
+        reactor.fission(25e18, user18);
+        vm.stopPrank();
+
+        vm.startPrank(user6);
+        sixDecimalToken.approve(address(sixDecimalReactor), 25e6);
+        sixDecimalReactor.fission(25e6, user6);
+        vm.stopPrank();
+
+        assertEq(
+            sixDecimalReactor.NEUTRON_TOKEN().balanceOf(user6),
+            reactor.NEUTRON_TOKEN().balanceOf(user18),
+            "fission neutron output should be decimal-independent"
+        );
+
+        assertEq(
+            sixDecimalReactor.PROTON_TOKEN().balanceOf(user6),
+            reactor.PROTON_TOKEN().balanceOf(user18),
+            "fission proton output should be decimal-independent"
+        );
+
+        assertEq(
+            sixDecimalReactor.reserveRatioPeggedAsset(),
+            reactor.reserveRatioPeggedAsset(),
+            "fission reserve ratio should be decimal-independent"
+        );
+
+        vm.prank(user18);
+        reactor.fusion(10e18, user18);
+
+        vm.prank(user6);
+        sixDecimalReactor.fusion(10e6, user6);
+
+        assertEq(baseToken.balanceOf(user18), 10e18, "wrong 18-decimal fusion output");
+        assertEq(sixDecimalToken.balanceOf(user6), 10e6, "wrong six-decimal fusion output");
+
+        assertEq(
+            sixDecimalReactor.NEUTRON_TOKEN().balanceOf(user6),
+            reactor.NEUTRON_TOKEN().balanceOf(user18),
+            "post-fusion neutron balance should be decimal-independent"
+        );
+
+        assertEq(
+            sixDecimalReactor.PROTON_TOKEN().balanceOf(user6),
+            reactor.PROTON_TOKEN().balanceOf(user18),
+            "post-fusion proton balance should be decimal-independent"
+        );
+
+        assertEq(
+            sixDecimalReactor.reserveRatioPeggedAsset(),
+            reactor.reserveRatioPeggedAsset(),
+            "post-fusion reserve ratio should be decimal-independent"
+        );
+    }
+
+    function testSixDecimalReserveMatchesEighteenDecimalTransmutations() public {
+        (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor) = _deploySixDecimalReactor();
+
+        address user18 = makeAddr("decimal18TransmuteUser");
+        address user6 = makeAddr("decimal6TransmuteUser");
+
+        baseToken.mint(user18, 100e18);
+        sixDecimalToken.mint(user6, 100e6);
+
+        vm.startPrank(user18);
+        baseToken.approve(address(reactor), 100e18);
+        reactor.fission(100e18, user18);
+        vm.stopPrank();
+
+        vm.startPrank(user6);
+        sixDecimalToken.approve(address(sixDecimalReactor), 100e6);
+        sixDecimalReactor.fission(100e6, user6);
+        vm.stopPrank();
+
+        mockFeed.setPrice(120_000_000);
+
+        vm.prank(user18);
+        (uint256 neutronOut18, uint256 plusFee18) = reactor.transmuteProtonToNeutron(1e18, user18);
+
+        vm.prank(user6);
+        (uint256 neutronOut6, uint256 plusFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, user6);
+
+        assertEq(neutronOut6, neutronOut18, "beta+ output should be decimal-independent");
+        assertEq(plusFee6, plusFee18, "beta+ fee should be decimal-independent");
+
+        vm.prank(user18);
+        (uint256 protonOut18, uint256 minusFee18) = reactor.transmuteNeutronToProton(1e18, user18);
+
+        vm.prank(user6);
+        (uint256 protonOut6, uint256 minusFee6) = sixDecimalReactor.transmuteNeutronToProton(1e18, user6);
+
+        assertEq(protonOut6, protonOut18, "beta- output should be decimal-independent");
+        assertEq(minusFee6, minusFee18, "beta- fee should be decimal-independent");
+
+        assertEq(
+            sixDecimalReactor.reserveRatioPeggedAsset(),
+            reactor.reserveRatioPeggedAsset(),
+            "transmutation reserve ratio should be decimal-independent"
+        );
+    }
+
+    function testSixDecimalFusionOfSmallestNativeUnitBurnsProtocolTokens() public {
+        (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor) = _deploySixDecimalReactor();
+
+        address user = makeAddr("sixDecimalTinyFusionUser");
+        uint256 fissionAmount = 100e6;
+
+        sixDecimalToken.mint(user, fissionAmount);
+
+        vm.startPrank(user);
+        sixDecimalToken.approve(address(sixDecimalReactor), fissionAmount);
+        sixDecimalReactor.fission(fissionAmount, user);
+        vm.stopPrank();
+
+        uint256 neutronBefore = sixDecimalReactor.NEUTRON_TOKEN().balanceOf(user);
+        uint256 protonBefore = sixDecimalReactor.PROTON_TOKEN().balanceOf(user);
+
+        vm.prank(user);
+        sixDecimalReactor.fusion(1, user);
+
+        assertEq(sixDecimalToken.balanceOf(user), 1, "wrong smallest-unit fusion output");
+        assertLt(sixDecimalReactor.NEUTRON_TOKEN().balanceOf(user), neutronBefore, "fusion should burn Neutron");
+        assertLt(sixDecimalReactor.PROTON_TOKEN().balanceOf(user), protonBefore, "fusion should burn Proton");
+    }
+
+    function testDeploymentRejectsReserveTokenAboveWadPrecision() public {
+        MockDecimalERC20 highDecimalToken = new MockDecimalERC20("High Decimal Token", "HDT", 19);
+
+        StableCoinFactory highDecimalFactory = new StableCoinFactory();
+
+        uint256 initialReserve = 100e19;
+        highDecimalToken.mint(address(this), initialReserve);
+        highDecimalToken.approve(address(highDecimalFactory), initialReserve);
+
+        vm.expectRevert(abi.encodeWithSelector(StableCoinReactor.InvalidBaseTokenDecimals.selector, uint8(19)));
+
+        highDecimalFactory.deployReactor(
+            "High Decimal Vault",
+            "High Decimal Token",
+            "HDT",
+            "Gluon USD",
+            "GUSD",
+            address(highDecimalToken),
+            address(adapter),
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            0,
+            0,
+            15e17,
+            initialReserve
+        );
+    }
+
+    function testFusionRejectsWithdrawalWhenRequiredBurnRoundsToZero() public {
+        address user = makeAddr("tinyFusionUser");
+
+        _fundAndFission(user, 100e18);
+        _adjustIntoOperatingRange();
+
+        vm.prank(user);
+        vm.expectRevert(StableCoinReactor.AmountTooSmall.selector);
+        reactor.fusion(1, user);
+    }
+
+    function testTransmutationsRejectZeroOutputAtFullBetaFee() public {
+        address user = makeAddr("fullBetaFeeUser");
+
+        _fundAndFission(user, 100e18);
+        _adjustIntoOperatingRange();
+
+        vm.prank(treasury);
+        reactor.setBetaParams(1e18, 0, 1e18);
+
+        vm.startPrank(user);
+
+        vm.expectRevert(StableCoinReactor.AmountTooSmall.selector);
+        reactor.transmuteProtonToNeutron(1e18, user);
+
+        vm.expectRevert(StableCoinReactor.AmountTooSmall.selector);
+        reactor.transmuteNeutronToProton(1e18, user);
+
+        vm.stopPrank();
     }
 
     function testFusionAfterFissionWithAdapter() public {
@@ -401,6 +808,76 @@ contract GluonIntegrationTest is Test {
             0,
             15e17,
             INITIAL_RESERVE
+        );
+    }
+
+    function testPrefundedInitializationWithFissionFeeAccountsForFullSeed() public {
+        uint256 factoryNonce = vm.getNonce(address(factory));
+        address predictedReactor = vm.computeCreateAddress(address(factory), factoryNonce);
+
+        uint256 prefundedAmount = 50e18;
+        uint256 requestedReserve = 100e18;
+        uint256 fissionFee = 1e17;
+
+        uint256 totalSeed = prefundedAmount + requestedReserve;
+        uint256 expectedFee = Math.mulDiv(totalSeed, fissionFee, 1e18);
+        uint256 expectedReserve = totalSeed - expectedFee;
+
+        uint256 expectedNeutronSeed = Math.mulDiv(expectedReserve, 1e18, 15e17);
+        uint256 expectedProtonSeed = expectedReserve - expectedNeutronSeed;
+
+        baseToken.mint(predictedReactor, prefundedAmount);
+
+        baseToken.mint(address(this), requestedReserve);
+        baseToken.approve(address(factory), requestedReserve);
+
+        uint256 treasuryBefore = baseToken.balanceOf(treasury);
+
+        StableCoinReactor prefundedFeeReactor = StableCoinReactor(
+            factory.deployReactor(
+                "Prefunded Fee Vault",
+                "USD Coin",
+                "USDC",
+                "Gluon USD",
+                "GUSD",
+                address(baseToken),
+                address(adapter),
+                "Gluon Gov",
+                "GOV",
+                treasury,
+                fissionFee,
+                0,
+                15e17,
+                requestedReserve
+            )
+        );
+
+        assertEq(address(prefundedFeeReactor), predictedReactor, "unexpected reactor address");
+
+        assertEq(baseToken.balanceOf(treasury), treasuryBefore + expectedFee, "wrong initial fission fee");
+
+        assertEq(prefundedFeeReactor.reserve(), expectedReserve, "wrong reserve after prefunding and fee");
+
+        assertEq(prefundedFeeReactor.NEUTRON_TOKEN().totalSupply(), expectedNeutronSeed, "wrong neutron seed");
+
+        assertEq(prefundedFeeReactor.PROTON_TOKEN().totalSupply(), expectedProtonSeed, "wrong proton seed");
+
+        assertEq(
+            prefundedFeeReactor.NEUTRON_TOKEN().balanceOf(address(prefundedFeeReactor)),
+            expectedNeutronSeed,
+            "neutron seed should remain locked"
+        );
+
+        assertEq(
+            prefundedFeeReactor.PROTON_TOKEN().balanceOf(address(prefundedFeeReactor)),
+            expectedProtonSeed,
+            "proton seed should remain locked"
+        );
+
+        assertEq(
+            prefundedFeeReactor.reserveRatioPeggedAsset(),
+            15e17,
+            "prefunded fee initialization should preserve target ratio"
         );
     }
 

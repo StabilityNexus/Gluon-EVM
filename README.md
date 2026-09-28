@@ -89,6 +89,8 @@ Gluon also supports **transmutation**, allowing value to move between Proton and
 
 A user deposits the configured base ERC-20 asset into a reactor.
 
+Reserve assets must expose ERC-20 decimal metadata and may use between 0 and 18 decimals. ERC-20 transfers, balances, fees, and Fission/Fusion base-asset event amounts remain in the reserve token's native units, while reactor pricing and reserve accounting normalize those amounts to 18-decimal WAD precision. The transmutation volume ledger is also WAD-normalized because it is used directly in beta-fee accounting. Reserve tokens with more than 18 decimals are rejected to avoid silent precision loss.
+
 The reactor:
 
 1. transfers the base asset from the user
