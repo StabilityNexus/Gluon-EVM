@@ -195,6 +195,36 @@ contract GluonIntegrationTest is Test {
         decimalReactor = StableCoinReactor(reactorAddress);
     }
 
+    function _deployDecimalReactorWithFissionFee(uint8 decimals_, uint256 initialReserve, uint256 fissionFee)
+        internal
+        returns (MockDecimalERC20 decimalToken, StableCoinReactor decimalReactor)
+    {
+        decimalToken = new MockDecimalERC20("USD Coin", "USDC", decimals_);
+        StableCoinFactory decimalFactory = new StableCoinFactory();
+
+        decimalToken.mint(address(this), initialReserve);
+        decimalToken.approve(address(decimalFactory), initialReserve);
+
+        address reactorAddress = decimalFactory.deployReactor(
+            "Decimal Fee Vault",
+            "USD Coin",
+            "USDC",
+            "Gluon USD",
+            "GUSD",
+            address(decimalToken),
+            address(adapter),
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            fissionFee,
+            0,
+            15e17,
+            initialReserve
+        );
+
+        decimalReactor = StableCoinReactor(reactorAddress);
+    }
+
     function _deploySixDecimalReactor()
         internal
         returns (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor)
@@ -466,6 +496,55 @@ contract GluonIntegrationTest is Test {
             sixDecimalReactor.reserveRatioPeggedAsset(),
             reactor.reserveRatioPeggedAsset(),
             "post-fusion reserve ratio should be decimal-independent"
+        );
+    }
+
+    function testSixDecimalFissionWithFeeMatchesEighteenDecimal() public {
+        uint256 fissionFee = 1e17;
+
+        (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor) =
+            _deployDecimalReactorWithFissionFee(6, 100e6, fissionFee);
+        (MockDecimalERC20 eighteenDecimalToken, StableCoinReactor eighteenDecimalReactor) =
+            _deployDecimalReactorWithFissionFee(18, 100e18, fissionFee);
+
+        address user6 = makeAddr("sixDecimalFeeUser");
+        address user18 = makeAddr("eighteenDecimalFeeUser");
+
+        sixDecimalToken.mint(user6, 25e6);
+        eighteenDecimalToken.mint(user18, 25e18);
+
+        uint256 sixDecimalReserveBefore = sixDecimalReactor.reserve();
+        uint256 sixDecimalTreasuryBefore = sixDecimalToken.balanceOf(treasury);
+
+        vm.startPrank(user6);
+        sixDecimalToken.approve(address(sixDecimalReactor), 25e6);
+        sixDecimalReactor.fission(25e6, user6);
+        vm.stopPrank();
+
+        vm.startPrank(user18);
+        eighteenDecimalToken.approve(address(eighteenDecimalReactor), 25e18);
+        eighteenDecimalReactor.fission(25e18, user18);
+        vm.stopPrank();
+
+        // The fee is taken in native units before the deposit is normalized.
+        assertEq(sixDecimalToken.balanceOf(treasury), sixDecimalTreasuryBefore + 25e5, "wrong native six-decimal fee");
+        assertEq(sixDecimalReactor.reserve(), sixDecimalReserveBefore + 225e5, "wrong native six-decimal reserve");
+
+        // The post-fee amount must normalize identically across decimals.
+        assertEq(
+            sixDecimalReactor.NEUTRON_TOKEN().balanceOf(user6),
+            eighteenDecimalReactor.NEUTRON_TOKEN().balanceOf(user18),
+            "neutron output should be decimal-independent with a fee"
+        );
+        assertEq(
+            sixDecimalReactor.PROTON_TOKEN().balanceOf(user6),
+            eighteenDecimalReactor.PROTON_TOKEN().balanceOf(user18),
+            "proton output should be decimal-independent with a fee"
+        );
+        assertEq(
+            sixDecimalReactor.reserveRatioPeggedAsset(),
+            eighteenDecimalReactor.reserveRatioPeggedAsset(),
+            "reserve ratio should be decimal-independent with a fee"
         );
     }
 

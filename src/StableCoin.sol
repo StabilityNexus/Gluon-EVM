@@ -212,8 +212,9 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     /// @dev The reactor's reserve in the representation used by every protocol calculation.
-    /// reserve() stays in the token's native units for the ERC-20 interface; anything feeding
-    /// pricing, reserve ratios or mint/burn math reads the reserve through here instead.
+    /// reserve() stays in the token's native units for the ERC-20 interface. fission() is the one
+    /// caller that converts the balance itself, because it also needs the native value as the
+    /// baseline for measuring the incoming deposit.
     function _reserveWad() internal view returns (uint256) {
         return _baseToWad(reserve());
     }

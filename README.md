@@ -91,7 +91,7 @@ A user deposits the configured base ERC-20 asset into a reactor.
 
 Reserve assets must expose ERC-20 decimal metadata and may use between 0 and 18 decimals. ERC-20 transfers, balances, fees, and Fission/Fusion base-asset event amounts remain in the reserve token's native units, while reactor pricing and reserve accounting normalize those amounts to 18-decimal WAD precision. The transmutation volume ledger is also WAD-normalized because it is used directly in beta-fee accounting. Reserve tokens with more than 18 decimals are rejected to avoid silent precision loss.
 
-Within the reactor, conversion happens only where native amounts enter or leave: once when a deposit has been measured after transfer, once when a withdrawal amount is read, and once behind the accessor that every pricing and reserve-ratio calculation uses. Protocol reserve, pricing, and ratio calculations use the normalized internal representation after values cross the ERC-20 boundary.
+Within the reactor, conversion happens only where native amounts enter or leave: once when a deposit has been measured after transfer, once when a withdrawal amount is read, and once behind the accessor used for reserve reads that feed pricing and reserve-ratio calculations. Fission converts its own cached balance, because it needs the native value as the baseline for measuring the deposit. Protocol reserve, pricing, and ratio calculations use the normalized internal representation after values cross the ERC-20 boundary.
 
 The reactor:
 
