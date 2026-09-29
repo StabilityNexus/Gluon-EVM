@@ -263,6 +263,38 @@ contract GluonIntegrationTest is Test {
         assertLe(ratio, target.UPPER_RESERVE_RATIO(), "failed to reach upper operating bound");
     }
 
+    function testSixDecimalFissionOfSmallestNativeUnitMintsProtocolTokens() public {
+        (MockDecimalERC20 sixDecimalToken, StableCoinReactor sixDecimalReactor) = _deploySixDecimalReactor();
+
+        address user = makeAddr("sixDecimalTinyFissionUser");
+        sixDecimalToken.mint(user, 1);
+
+        vm.startPrank(user);
+        sixDecimalToken.approve(address(sixDecimalReactor), 1);
+        sixDecimalReactor.fission(1, user);
+        vm.stopPrank();
+
+        assertGt(sixDecimalReactor.NEUTRON_TOKEN().balanceOf(user), 0, "no neutron minted");
+        assertGt(sixDecimalReactor.PROTON_TOKEN().balanceOf(user), 0, "no proton minted");
+    }
+
+    function testFissionRejectsDepositWhenBothOutputsRoundToZero() public {
+        address setupUser = makeAddr("tinyFissionSetupUser");
+        _fundAndFission(setupUser, 100e18);
+        _adjustIntoOperatingRange();
+
+        address user = makeAddr("tinyFissionUser");
+        baseToken.mint(user, 1);
+
+        vm.startPrank(user);
+        baseToken.approve(address(reactor), 1);
+
+        vm.expectRevert(StableCoinReactor.AmountTooSmall.selector);
+        reactor.fission(1, user);
+
+        vm.stopPrank();
+    }
+
     function testFissionWithAdapter() public {
         address user = makeAddr("user");
 
