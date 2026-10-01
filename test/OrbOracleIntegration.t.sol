@@ -143,6 +143,50 @@ contract OrbOracleIntegrationTest is Test {
         assertEq(reactor.lastSuccessfulBasePrice(), FALLBACK_ORACLE_VALUE);
     }
 
+    function testCachedPriceSurvivesTemporaryZeroOraclePrice() public {
+        reactor = _deployReactor();
+
+        address user = makeAddr("zeroCacheUser");
+        uint256 fissionAmount = 100e18;
+        uint256 fusionAmount = 10e18;
+
+        baseToken.mint(user, fissionAmount);
+
+        vm.startPrank(user);
+        baseToken.approve(address(reactor), fissionAmount);
+        reactor.fission(fissionAmount, user);
+        vm.stopPrank();
+
+        assertEq(reactor.lastSuccessfulBasePrice(), ORACLE_VALUE);
+
+        // Zero is a valid Orb reading, not a failure.
+        vm.warp(block.timestamp + 1);
+
+        vm.prank(reporter);
+        orbOracle.submitValue(0);
+
+        assertEq(orbOracle.readValue(), 0);
+
+        // adjustPeg returns instead of reverting at a zero price, so whatever it caches persists.
+        reactor.adjustPeg();
+
+        assertEq(reactor.lastSuccessfulBasePrice(), ORACLE_VALUE);
+
+        vm.prank(reporter);
+        orbOracle.voteBlacklist(address(reactor));
+
+        assertEq(reactor.getBasePriceInPeggedAsset(), ORACLE_VALUE);
+
+        uint256 userBaseBefore = baseToken.balanceOf(user);
+        uint256 reserveBefore = reactor.reserve();
+
+        vm.prank(user);
+        reactor.fusion(fusionAmount, user);
+
+        assertEq(baseToken.balanceOf(user) - userBaseBefore, fusionAmount);
+        assertEq(reserveBefore - reactor.reserve(), fusionAmount);
+    }
+
     function testFissionWorksWithOrbOracle() public {
         reactor = _deployReactor();
 
