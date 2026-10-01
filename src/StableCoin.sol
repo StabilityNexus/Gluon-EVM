@@ -248,10 +248,15 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     /// @dev Same read, but persists the price so the reactor keeps operating if the oracle later
-    /// reverts. The write survives only if the calling operation completes.
+    /// reverts. The write survives only if the calling operation completes. A zero price is
+    /// returned as read but never cached: adjustPeg() and the transmutations return normally at a
+    /// zero price, so caching it would persist and leave no usable fallback if the oracle then
+    /// starts reverting.
     function _readAndCacheBasePrice() internal returns (uint256) {
         try ORACLE.readValue() returns (uint256 basePrice) {
-            lastSuccessfulBasePrice = basePrice;
+            if (basePrice != 0) {
+                lastSuccessfulBasePrice = basePrice;
+            }
             return basePrice;
         } catch {
             return lastSuccessfulBasePrice;
