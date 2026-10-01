@@ -417,7 +417,7 @@ contract GluonIntegrationTest is Test {
         assertEq(firstFee6, firstFee18, "first beta+ fee should match");
         assertEq(firstOut6, firstOut18, "first beta+ output should match");
 
-        // The second beta+ exercises phi1 * decayedVolumeBase / reserveWad.
+        // The second beta+ exercises phi1 * decayedVolumeBase / normalizedReserve.
         vm.prank(user18);
         (uint256 secondOut18, uint256 secondFee18) = reactor.transmuteProtonToNeutron(1e18, user18);
 
