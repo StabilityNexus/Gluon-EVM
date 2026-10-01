@@ -237,8 +237,8 @@ contract StableCoinReactor is ReentrancyGuard {
         }
     }
 
-    /// @dev Base/PeggedAsset price (WAD).
-    /// Falls back to the last value cached by a successful state-changing oracle read.
+    /// @dev Base/PeggedAsset price (WAD), falling back to the cached price when the oracle reverts.
+    /// A view cannot persist a price, so only _readAndCacheBasePrice() refreshes the cache.
     function getBasePriceInPeggedAsset() public view returns (uint256) {
         try ORACLE.readValue() returns (uint256 basePrice) {
             return basePrice;
@@ -247,6 +247,8 @@ contract StableCoinReactor is ReentrancyGuard {
         }
     }
 
+    /// @dev Same read, but persists the price so the reactor keeps operating if the oracle later
+    /// reverts. The write survives only if the calling operation completes.
     function _readAndCacheBasePrice() internal returns (uint256) {
         try ORACLE.readValue() returns (uint256 basePrice) {
             lastSuccessfulBasePrice = basePrice;
