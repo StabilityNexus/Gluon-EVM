@@ -92,6 +92,9 @@ contract OrbOracleIntegrationTest is Test {
 
         assertEq(orbOracle.readValue(), UPDATED_ORACLE_VALUE);
         assertEq(reactor.getBasePriceInPeggedAsset(), UPDATED_ORACLE_VALUE);
+
+        // Reading through a view does not persist: only state-changing operations refresh the cache.
+        assertEq(reactor.lastSuccessfulBasePrice(), ORACLE_VALUE);
     }
 
     function testFusionUsesCachedPriceWhenOrbBlacklistsReactor() public {
@@ -119,6 +122,14 @@ contract OrbOracleIntegrationTest is Test {
         orbOracle.voteBlacklist(address(reactor));
 
         assertTrue(orbOracle.isBlacklisted(address(reactor)));
+
+        // Move Orb's live value so the cached price is provably distinct from what Orb now reports.
+        vm.warp(block.timestamp + 1);
+
+        vm.prank(reporter);
+        orbOracle.submitValue(UPDATED_ORACLE_VALUE);
+
+        assertEq(orbOracle.readValue(), UPDATED_ORACLE_VALUE);
         assertEq(reactor.getBasePriceInPeggedAsset(), FALLBACK_ORACLE_VALUE);
 
         uint256 userBaseBefore = baseToken.balanceOf(user);
