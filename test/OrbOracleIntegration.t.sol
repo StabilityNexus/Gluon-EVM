@@ -12,6 +12,7 @@ import {MockERC20} from "./mocks/MockERC20.sol";
 contract OrbOracleIntegrationTest is Test {
     uint256 internal constant ORACLE_VALUE = 1e18;
     uint256 internal constant UPDATED_ORACLE_VALUE = 2e18;
+    uint256 internal constant FALLBACK_ORACLE_VALUE = 11e17;
     uint256 internal constant ORACLE_WEIGHT = 100e18;
     uint256 internal constant INITIAL_RESERVE = 100e18;
     uint256 internal constant DEPOSIT_LOCKING_PERIOD = 1;
@@ -75,6 +76,7 @@ contract OrbOracleIntegrationTest is Test {
         reactor = _deployReactor();
 
         assertEq(address(reactor.ORACLE()), address(orbOracle));
+        assertEq(reactor.lastSuccessfulBasePrice(), ORACLE_VALUE);
         assertEq(factory.getDeployedReactorsCount(), 1);
     }
 
@@ -92,13 +94,49 @@ contract OrbOracleIntegrationTest is Test {
         assertEq(reactor.getBasePriceInPeggedAsset(), UPDATED_ORACLE_VALUE);
     }
 
+    function testFusionUsesCachedPriceWhenOrbBlacklistsReactor() public {
+        reactor = _deployReactor();
+
+        address user = makeAddr("blacklistUser");
+        uint256 fissionAmount = 100e18;
+        uint256 fusionAmount = 10e18;
+
+        vm.warp(block.timestamp + 1);
+
+        vm.prank(reporter);
+        orbOracle.submitValue(FALLBACK_ORACLE_VALUE);
+
+        baseToken.mint(user, fissionAmount);
+
+        vm.startPrank(user);
+        baseToken.approve(address(reactor), fissionAmount);
+        reactor.fission(fissionAmount, user);
+        vm.stopPrank();
+
+        assertEq(reactor.lastSuccessfulBasePrice(), FALLBACK_ORACLE_VALUE);
+
+        vm.prank(reporter);
+        orbOracle.voteBlacklist(address(reactor));
+
+        assertTrue(orbOracle.isBlacklisted(address(reactor)));
+        assertEq(reactor.getBasePriceInPeggedAsset(), FALLBACK_ORACLE_VALUE);
+
+        uint256 userBaseBefore = baseToken.balanceOf(user);
+        uint256 reserveBefore = reactor.reserve();
+
+        vm.prank(user);
+        reactor.fusion(fusionAmount, user);
+
+        assertEq(baseToken.balanceOf(user) - userBaseBefore, fusionAmount);
+        assertEq(reserveBefore - reactor.reserve(), fusionAmount);
+        assertEq(reactor.lastSuccessfulBasePrice(), FALLBACK_ORACLE_VALUE);
+    }
+
     function testFissionWorksWithOrbOracle() public {
         reactor = _deployReactor();
 
         address user = makeAddr("fissionUser");
         uint256 amount = 100e18;
-
-        _adjustIntoOperatingRange();
 
         baseToken.mint(user, amount);
 
@@ -118,16 +156,12 @@ contract OrbOracleIntegrationTest is Test {
         uint256 fissionAmount = 100e18;
         uint256 fusionAmount = 10e18;
 
-        _adjustIntoOperatingRange();
-
         baseToken.mint(user, fissionAmount);
 
         vm.startPrank(user);
         baseToken.approve(address(reactor), fissionAmount);
         reactor.fission(fissionAmount, user);
         vm.stopPrank();
-
-        _adjustIntoOperatingRange();
 
         uint256 userBaseBefore = baseToken.balanceOf(user);
         uint256 reserveBefore = reactor.reserve();
@@ -165,22 +199,5 @@ contract OrbOracleIntegrationTest is Test {
         );
 
         return StableCoinReactor(reactorAddress);
-    }
-
-    function _adjustIntoOperatingRange() internal {
-        uint256 iterations;
-
-        while (
-            (reactor.reserveRatioPeggedAsset() < reactor.CRITICAL_RESERVE_RATIO()
-                    || reactor.reserveRatioPeggedAsset() > reactor.UPPER_RESERVE_RATIO()) && iterations < 100
-        ) {
-            reactor.adjustPeg();
-            iterations++;
-        }
-
-        uint256 ratio = reactor.reserveRatioPeggedAsset();
-
-        assertGe(ratio, reactor.CRITICAL_RESERVE_RATIO(), "failed to reach lower operating bound");
-        assertLe(ratio, reactor.UPPER_RESERVE_RATIO(), "failed to reach upper operating bound");
     }
 }

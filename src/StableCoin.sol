@@ -64,8 +64,9 @@ contract StableCoinReactor is ReentrancyGuard {
     string public peggedAssetName;
     string public peggedAssetSymbol;
 
-    // Oracle (Adapter)
+    // Oracle
     IOracle public immutable ORACLE;
+    uint256 public lastSuccessfulBasePrice;
 
     address public immutable FACTORY;
     address public immutable TREASURY;
@@ -224,7 +225,7 @@ contract StableCoinReactor is ReentrancyGuard {
         if (NEUTRON_TOKEN.totalSupply() != 0 || PROTON_TOKEN.totalSupply() != 0) revert AlreadyInitialized();
         if (amountIn == 0) revert InvalidInitialReserve();
 
-        uint256 basePrice = getBasePriceInPeggedAsset();
+        uint256 basePrice = _readAndCacheBasePrice();
         (uint256 neutronOut, uint256 protonOut) =
             fissionAux(amountIn, address(this), INITIAL_RESERVE_RATIO, 0, basePrice);
 
@@ -237,9 +238,22 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     /// @dev Base/PeggedAsset price (WAD).
-    /// Delegates to the Oracle Adapter.
+    /// Falls back to the last value cached by a successful state-changing oracle read.
     function getBasePriceInPeggedAsset() public view returns (uint256) {
-        return ORACLE.readValue();
+        try ORACLE.readValue() returns (uint256 basePrice) {
+            return basePrice;
+        } catch {
+            return lastSuccessfulBasePrice;
+        }
+    }
+
+    function _readAndCacheBasePrice() internal returns (uint256) {
+        try ORACLE.readValue() returns (uint256 basePrice) {
+            lastSuccessfulBasePrice = basePrice;
+            return basePrice;
+        } catch {
+            return lastSuccessfulBasePrice;
+        }
     }
 
     function _normalizedTargetPriceInBase(uint256 basePrice) internal view returns (uint256) {
@@ -322,7 +336,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 normalizedReserve = _normalizedReserve();
         uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
 
-        uint256 basePrice = getBasePriceInPeggedAsset();
+        uint256 basePrice = _readAndCacheBasePrice();
         if (basePrice == 0) return;
 
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyTotal, basePrice);
@@ -347,7 +361,7 @@ contract StableCoinReactor is ReentrancyGuard {
         // twice would mean two balanceOf calls.
         uint256 reserveBaseline = reserve();
         uint256 neutronSupplyBefore = NEUTRON_TOKEN.totalSupply();
-        uint256 basePrice = getBasePriceInPeggedAsset();
+        uint256 basePrice = _readAndCacheBasePrice();
 
         uint256 reserveRatio = _reserveRatioWad(_baseToWad(reserveBaseline), neutronSupplyBefore, basePrice);
         _requireOperatingRange(reserveRatio);
@@ -414,7 +428,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonSupplyTotal = PROTON_TOKEN.totalSupply();
         if (neutronSupplyTotal == 0 || protonSupplyTotal == 0) revert EmptySupply();
 
-        uint256 basePrice = getBasePriceInPeggedAsset();
+        uint256 basePrice = _readAndCacheBasePrice();
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyTotal, basePrice);
         _requireOperatingRange(reserveRatio);
 
@@ -492,7 +506,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
-        uint256 basePrice = getBasePriceInPeggedAsset();
+        uint256 basePrice = _readAndCacheBasePrice();
         if (basePrice == 0) return (0, 0);
 
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
@@ -540,7 +554,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
-        uint256 basePrice = getBasePriceInPeggedAsset();
+        uint256 basePrice = _readAndCacheBasePrice();
         if (basePrice == 0) return (0, 0);
 
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
