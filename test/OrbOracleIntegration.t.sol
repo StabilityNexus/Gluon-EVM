@@ -187,6 +187,50 @@ contract OrbOracleIntegrationTest is Test {
         assertEq(reserveBefore - reactor.reserve(), fusionAmount);
     }
 
+    function testTransmutationRequiresLiveOracleWhileWithdrawalStaysOpen() public {
+        reactor = _deployReactor();
+
+        address user = makeAddr("degradedUser");
+        uint256 fissionAmount = 100e18;
+
+        baseToken.mint(user, fissionAmount);
+
+        vm.startPrank(user);
+        baseToken.approve(address(reactor), fissionAmount);
+        reactor.fission(fissionAmount, user);
+        vm.stopPrank();
+
+        vm.prank(reporter);
+        orbOracle.voteBlacklist(address(reactor));
+
+        assertTrue(orbOracle.isBlacklisted(address(reactor)));
+
+        // Converting between Proton and Neutron uses the oracle price as an exchange rate,
+        // so it must not run on a cached price.
+        vm.startPrank(user);
+
+        vm.expectRevert(abi.encodeWithSignature("BlacklistedCaller()"));
+        reactor.transmuteProtonToNeutron(1e18, user);
+
+        vm.expectRevert(abi.encodeWithSignature("BlacklistedCaller()"));
+        reactor.transmuteNeutronToProton(1e18, user);
+
+        vm.stopPrank();
+
+        // adjustPeg still reaches a usable cached price: a zero price would return silently
+        // instead of reverting, so this revert proves the fallback supplied a real price.
+        vm.expectRevert(StableCoinReactor.PegAdjustmentNotNeeded.selector);
+        reactor.adjustPeg();
+
+        // Withdrawal stays open, which is the behaviour the fallback exists to protect.
+        uint256 userBaseBefore = baseToken.balanceOf(user);
+
+        vm.prank(user);
+        reactor.fusion(10e18, user);
+
+        assertEq(baseToken.balanceOf(user) - userBaseBefore, 10e18);
+    }
+
     function testFissionWorksWithOrbOracle() public {
         reactor = _deployReactor();
 
