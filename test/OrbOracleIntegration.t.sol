@@ -187,10 +187,13 @@ contract OrbOracleIntegrationTest is Test {
         assertEq(reserveBefore - reactor.reserve(), fusionAmount);
     }
 
-    function testTransmutationRequiresLiveOracleWhileWithdrawalStaysOpen() public {
-        reactor = _deployReactor();
+    function testTransmutationUsesCachedPriceWhenOrbBlacklistsReactor() public {
+        // A lower critical ratio leaves headroom for beta+, which mints Neutron and therefore
+        // lowers the reserve ratio. At the seeded 1.5e18 it would otherwise revert on the
+        // critical-ratio check before the oracle fallback could be exercised.
+        reactor = _deployReactorWithCriticalRatio(1e18);
 
-        address user = makeAddr("degradedUser");
+        address user = makeAddr("transmuteUser");
         uint256 fissionAmount = 100e18;
 
         baseToken.mint(user, fissionAmount);
@@ -200,35 +203,50 @@ contract OrbOracleIntegrationTest is Test {
         reactor.fission(fissionAmount, user);
         vm.stopPrank();
 
+        assertEq(reactor.lastSuccessfulBasePrice(), ORACLE_VALUE);
+
         vm.prank(reporter);
         orbOracle.voteBlacklist(address(reactor));
 
         assertTrue(orbOracle.isBlacklisted(address(reactor)));
 
-        // Converting between Proton and Neutron uses the oracle price as an exchange rate,
-        // so it must not run on a cached price.
-        vm.startPrank(user);
+        // Move Orb's live value so the cached price is provably distinct from what Orb reports.
+        vm.warp(block.timestamp + 1);
 
-        vm.expectRevert(abi.encodeWithSignature("BlacklistedCaller()"));
-        reactor.transmuteProtonToNeutron(1e18, user);
+        vm.prank(reporter);
+        orbOracle.submitValue(UPDATED_ORACLE_VALUE);
 
-        vm.expectRevert(abi.encodeWithSignature("BlacklistedCaller()"));
-        reactor.transmuteNeutronToProton(1e18, user);
+        assertEq(orbOracle.readValue(), UPDATED_ORACLE_VALUE);
+        assertEq(reactor.getBasePriceInPeggedAsset(), ORACLE_VALUE);
 
-        vm.stopPrank();
-
-        // adjustPeg still reaches a usable cached price: a zero price would return silently
-        // instead of reverting, so this revert proves the fallback supplied a real price.
-        vm.expectRevert(StableCoinReactor.PegAdjustmentNotNeeded.selector);
-        reactor.adjustPeg();
-
-        // Withdrawal stays open, which is the behaviour the fallback exists to protect.
-        uint256 userBaseBefore = baseToken.balanceOf(user);
+        uint256 neutronBefore = reactor.NEUTRON_TOKEN().balanceOf(user);
+        uint256 protonBefore = reactor.PROTON_TOKEN().balanceOf(user);
 
         vm.prank(user);
-        reactor.fusion(10e18, user);
+        (uint256 neutronOut,) = reactor.transmuteProtonToNeutron(1e18, user);
 
-        assertEq(baseToken.balanceOf(user) - userBaseBefore, 10e18);
+        assertGt(neutronOut, 0, "beta+ produced no Neutron");
+        assertEq(reactor.PROTON_TOKEN().balanceOf(user), protonBefore - 1e18, "beta+ burned the wrong Proton amount");
+        assertEq(
+            reactor.NEUTRON_TOKEN().balanceOf(user), neutronBefore + neutronOut, "beta+ minted the wrong Neutron amount"
+        );
+
+        uint256 neutronAfterPlus = reactor.NEUTRON_TOKEN().balanceOf(user);
+        uint256 protonAfterPlus = reactor.PROTON_TOKEN().balanceOf(user);
+
+        vm.prank(user);
+        (uint256 protonOut,) = reactor.transmuteNeutronToProton(1e18, user);
+
+        assertGt(protonOut, 0, "beta- produced no Proton");
+        assertEq(
+            reactor.NEUTRON_TOKEN().balanceOf(user), neutronAfterPlus - 1e18, "beta- burned the wrong Neutron amount"
+        );
+        assertEq(
+            reactor.PROTON_TOKEN().balanceOf(user), protonAfterPlus + protonOut, "beta- minted the wrong Proton amount"
+        );
+
+        // The blacklist never let a live read through, so the cache is untouched.
+        assertEq(reactor.lastSuccessfulBasePrice(), ORACLE_VALUE);
     }
 
     function testFissionWorksWithOrbOracle() public {
@@ -276,7 +294,7 @@ contract OrbOracleIntegrationTest is Test {
         assertLt(reactor.PROTON_TOKEN().balanceOf(user), protonBefore);
     }
 
-    function _deployReactor() internal returns (StableCoinReactor) {
+    function _deployReactorWithCriticalRatio(uint256 criticalReserveRatio) internal returns (StableCoinReactor) {
         baseToken.mint(address(this), INITIAL_RESERVE);
         baseToken.approve(address(factory), INITIAL_RESERVE);
 
@@ -293,10 +311,14 @@ contract OrbOracleIntegrationTest is Test {
             treasury,
             0,
             0,
-            15e17,
+            criticalReserveRatio,
             INITIAL_RESERVE
         );
 
         return StableCoinReactor(reactorAddress);
+    }
+
+    function _deployReactor() internal returns (StableCoinReactor) {
+        return _deployReactorWithCriticalRatio(15e17);
     }
 }
