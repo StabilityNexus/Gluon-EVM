@@ -263,17 +263,6 @@ contract StableCoinReactor is ReentrancyGuard {
         }
     }
 
-    /// @dev Price for the transmutations, which convert between Proton and Neutron at an
-    /// oracle-derived rate. They play no part in recovering the reserve, so they fail closed
-    /// rather than trade on a cached price. fusion() and adjustPeg() keep the fallback, which is
-    /// what keeps the reserve reachable while the oracle reverts.
-    function _requireLiveBasePrice() internal returns (uint256 basePrice) {
-        basePrice = ORACLE.readValue();
-        if (basePrice != 0) {
-            lastSuccessfulBasePrice = basePrice;
-        }
-    }
-
     function _normalizedTargetPriceInBase(uint256 basePrice) internal view returns (uint256) {
         if (basePrice == 0) return type(uint256).max;
 
@@ -524,7 +513,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
-        uint256 basePrice = _requireLiveBasePrice();
+        uint256 basePrice = _readAndCacheBasePrice();
         if (basePrice == 0) return (0, 0);
 
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
@@ -572,7 +561,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
-        uint256 basePrice = _requireLiveBasePrice();
+        uint256 basePrice = _readAndCacheBasePrice();
         if (basePrice == 0) return (0, 0);
 
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
