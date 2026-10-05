@@ -45,3 +45,24 @@ jobs:
         run: |
           forge test -vvv
         id: test
+
+  slither:
+    name: Slither static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.7.1
+
+      - name: Install Slither
+        run: |
+          python3 -m pip install --disable-pip-version-check "slither-analyzer==0.11.6"
+
+      - name: Run Slither
+        run: |
+          slither . --exclude-dependencies --fail-high

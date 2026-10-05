@@ -455,9 +455,13 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     function _rpow(uint256 x, uint256 n) internal pure returns (uint256 z) {
+        // Exponent parity check for binary exponentiation; this is not randomness.
+        // slither-disable-next-line weak-prng
         z = (n % 2 != 0) ? x : WAD;
         for (n /= 2; n != 0; n /= 2) {
             x = Math.mulDiv(x, x, WAD);
+            // Exponent parity check for binary exponentiation; this is not randomness.
+            // slither-disable-next-line weak-prng
             if (n % 2 != 0) z = Math.mulDiv(z, x, WAD);
         }
     }
