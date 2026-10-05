@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "label": "Best Practices",
-  "message": "90%",
+  "message": "96%",
   "schema": "aossie-best-practices-v1",
   "updated": "2026-10-05",
-  "met": 44,
+  "met": 47,
   "total": 49,
-  "percent": 90,
+  "percent": 96,
   "color": "brightgreen",
   "categories": {
     "basics": {
@@ -22,7 +22,7 @@
       "total": 8
     },
     "quality": {
-      "met": 9,
+      "met": 10,
       "total": 11
     },
     "security": {
@@ -30,7 +30,7 @@
       "total": 9
     },
     "analysis": {
-      "met": 4,
+      "met": 6,
       "total": 7
     }
   }

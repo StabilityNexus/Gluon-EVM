@@ -27,10 +27,10 @@
 | Basics             | 8   | 8     | ✅     |
 | Change Control     | 6   | 6     | ✅     |
 | Reporting          | 8   | 8     | ✅     |
-| Quality            | 9   | 11     | 🟡     |
+| Quality            | 10   | 11     | 🟡     |
 | Security           | 9   | 9     | ✅     |
-| Analysis           | 4   | 7     | 🟡     |
-| **Total**          | **44** | **49** | **90%** |
+| Analysis           | 6   | 7     | 🟡     |
+| **Total**          | **47** | **49** | **96%** |
 ---
 
 ## 🏗️ Basics
