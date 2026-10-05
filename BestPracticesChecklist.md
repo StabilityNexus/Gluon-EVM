@@ -163,8 +163,8 @@
 - [x] 🔴 **warnings** — At least one linter or compiler warning flag is enabled (ESLint, Pylint, clippy, golangci-lint, Slither for Solidity, etc.).
   - *Tool used:* Slither static analysis and Foundry compiler/lint checks. Slither was run with `slither . --exclude-dependencies`.
 
-- [ ] 🔴 **warnings_fixed** — Warnings from the linter are addressed (not suppressed without reason).
-  - *Note:* Requires a dedicated linter/static-analysis workflow before this criterion can be verified.
+- [x] 🔴 **warnings_fixed** — Warnings from the linter are addressed (not suppressed without reason).
+  - *Evidence:* CI runs `forge lint src test --deny warnings`; intentional safe casts are narrowly suppressed with inline justification.
 
 - [ ] 🔵 **warnings_strict** — Project uses maximum strictness in linter config where practical. *(SUGGESTED)*
   - *Note:* A dedicated strict static-analysis configuration has not yet been added.

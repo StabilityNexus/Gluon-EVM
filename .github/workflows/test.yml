@@ -29,6 +29,11 @@ jobs:
           forge fmt --check
         id: fmt
 
+      - name: Run Forge lint
+        run: |
+          forge lint src test --deny warnings
+        id: lint
+
       - name: Run Forge build
         run: |
           forge build --sizes
