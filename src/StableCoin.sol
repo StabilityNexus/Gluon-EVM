@@ -422,6 +422,36 @@ contract StableCoinReactor is ReentrancyGuard {
         emit Fission(msg.sender, to, received, neutronOut, protonOut, fee);
     }
 
+    /// @notice Returns the Neutron and Proton amounts required to redeem `m`
+    /// base-token units through fusion.
+    /// @param m Base-token amount in the base token's native units.
+    function fusionBurnAmounts(uint256 m) external view returns (uint256 nBurn, uint256 pBurn) {
+        if (m == 0) revert AmountZero();
+
+        uint256 normalizedReserve = _normalizedReserve();
+        if (normalizedReserve == 0) revert EmptyReserve();
+
+        uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
+        uint256 protonSupplyTotal = PROTON_TOKEN.totalSupply();
+        if (neutronSupplyTotal == 0 || protonSupplyTotal == 0) revert EmptySupply();
+
+        uint256 baseOut = _baseToWad(m);
+
+        return _fusionBurnAmounts(baseOut, normalizedReserve, neutronSupplyTotal, protonSupplyTotal);
+    }
+
+    function _fusionBurnAmounts(
+        uint256 baseOut,
+        uint256 normalizedReserve,
+        uint256 neutronSupplyTotal,
+        uint256 protonSupplyTotal
+    ) internal pure returns (uint256 nBurn, uint256 pBurn) {
+        nBurn = Math.mulDiv(baseOut, neutronSupplyTotal, normalizedReserve);
+        pBurn = Math.mulDiv(baseOut, protonSupplyTotal, normalizedReserve);
+
+        if (nBurn == 0 || pBurn == 0) revert AmountTooSmall();
+    }
+
     function fusion(uint256 m, address to) external nonReentrant {
         if (m == 0) revert AmountZero();
         // Entry boundary: the reserve and the requested amount are converted once, here.
@@ -439,9 +469,8 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyTotal, basePrice);
         _requireOperatingRange(reserveRatio);
 
-        uint256 nBurn = Math.mulDiv(baseOut, neutronSupplyTotal, normalizedReserve);
-        uint256 pBurn = Math.mulDiv(baseOut, protonSupplyTotal, normalizedReserve);
-        if (nBurn == 0 || pBurn == 0) revert AmountTooSmall();
+        (uint256 nBurn, uint256 pBurn) =
+            _fusionBurnAmounts(baseOut, normalizedReserve, neutronSupplyTotal, protonSupplyTotal);
 
         NEUTRON_TOKEN.burn(msg.sender, nBurn);
         PROTON_TOKEN.burn(msg.sender, pBurn);
