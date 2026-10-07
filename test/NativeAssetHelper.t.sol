@@ -31,12 +31,18 @@ contract MockOtherERC20 is ERC20 {
 }
 
 contract MockNativeOracle is IOracle {
-    function readValue() external pure returns (uint256 value) {
-        return 1e18;
+    uint256 internal value = 1e18;
+
+    function setValue(uint256 newValue) external {
+        value = newValue;
     }
 
-    function readValueInterval() external pure returns (uint256 minValue, uint256 maxValue) {
-        return (1e18, 1e18);
+    function readValue() external view returns (uint256) {
+        return value;
+    }
+
+    function readValueInterval() external view returns (uint256 minValue, uint256 maxValue) {
+        return (value, value);
     }
 
     function lastUpdated() external view returns (uint256 timestamp) {
@@ -339,5 +345,21 @@ contract NativeAssetHelperTest is Test {
         assertEq(reactor.reserve(), reserveBefore, "failed native payout must roll reserve back");
 
         assertEq(wrapped.balanceOf(address(helper)), 0, "helper must not retain wrapped asset");
+    }
+
+    function testFusionBurnQuoteRejectsOutsideOperatingRange() public {
+        _fissionOneNative();
+
+        // Drop the oracle price enough to move the reactor below
+        // its configured operating range.
+        oracle.setValue(5e17);
+
+        uint256 reserveRatio = reactor.reserveRatioPeggedAsset();
+
+        assertLt(reserveRatio, reactor.CRITICAL_RESERVE_RATIO());
+
+        vm.expectRevert(abi.encodeWithSelector(StableCoinReactor.ReserveRatioOutOfRange.selector, reserveRatio));
+
+        reactor.fusionBurnAmounts(0.25 ether);
     }
 }

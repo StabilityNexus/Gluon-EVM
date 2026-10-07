@@ -435,6 +435,10 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 protonSupplyTotal = PROTON_TOKEN.totalSupply();
         if (neutronSupplyTotal == 0 || protonSupplyTotal == 0) revert EmptySupply();
 
+        uint256 basePrice = getBasePriceInPeggedAsset();
+        uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyTotal, basePrice);
+        _requireOperatingRange(reserveRatio);
+
         uint256 baseOut = _baseToWad(m);
 
         return _fusionBurnAmounts(baseOut, normalizedReserve, neutronSupplyTotal, protonSupplyTotal);
