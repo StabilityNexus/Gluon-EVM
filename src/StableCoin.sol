@@ -455,9 +455,13 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     function _rpow(uint256 x, uint256 n) internal pure returns (uint256 z) {
+        // Exponent parity check for binary exponentiation; this is not randomness.
+        // slither-disable-next-line weak-prng
         z = (n % 2 != 0) ? x : WAD;
         for (n /= 2; n != 0; n /= 2) {
             x = Math.mulDiv(x, x, WAD);
+            // Exponent parity check for binary exponentiation; this is not randomness.
+            // slither-disable-next-line weak-prng
             if (n % 2 != 0) z = Math.mulDiv(z, x, WAD);
         }
     }
@@ -475,8 +479,12 @@ contract StableCoinReactor is ReentrancyGuard {
         if (decayedVolumeBase != 0) {
             int256 v = decayedVolumeBase;
             if (v > 0) {
+                // v > 0 and d <= WAD, so the converted result remains within int256 range.
+                // forge-lint: disable-next-line(unsafe-typecast)
                 decayedVolumeBase = int256(Math.mulDiv(uint256(v), d, WAD));
             } else {
+                // v < 0 here; Solidity's checked -v preserves the existing overflow protection.
+                // forge-lint: disable-next-line(unsafe-typecast)
                 decayedVolumeBase = -int256(Math.mulDiv(uint256(-v), d, WAD));
             }
         }
@@ -487,6 +495,8 @@ contract StableCoinReactor is ReentrancyGuard {
         if (normalizedReserve == 0) return WAD;
         if (betaPhi0 == 0 && betaPhi1 == 0) return 0;
         int256 v = decayedVolumeBase;
+        // The conversion is evaluated only when v > 0.
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint256 pos = v > 0 ? uint256(v) : 0;
         uint256 term = Math.mulDiv(betaPhi1, pos, normalizedReserve);
         uint256 f = betaPhi0 + term;
@@ -497,6 +507,8 @@ contract StableCoinReactor is ReentrancyGuard {
         if (normalizedReserve == 0) return WAD;
         if (betaPhi0 == 0 && betaPhi1 == 0) return 0;
         int256 v = decayedVolumeBase;
+        // The conversion is evaluated only when v < 0; checked -v preserves overflow protection.
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint256 neg = v < 0 ? uint256(-v) : 0;
         uint256 term = Math.mulDiv(betaPhi1, neg, normalizedReserve);
         uint256 f = betaPhi0 + term;
@@ -630,6 +642,8 @@ contract StableCoinReactor is ReentrancyGuard {
 
     function _grossBaseToInt(uint256 value) internal pure returns (int256) {
         if (value > uint256(type(int256).max)) revert MathOverflow();
+        // The explicit bound check guarantees value fits in int256.
+        // forge-lint: disable-next-line(unsafe-typecast)
         return int256(value);
     }
 }
