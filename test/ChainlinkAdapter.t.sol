@@ -106,4 +106,10 @@ contract ChainlinkAdapterTest is Test {
 
         assertEq(adapter.description(), "MOCK / USD", "wrong description");
     }
+
+    function testRevertsOnEoaFeedAddress() public {
+        address eoa = makeAddr("eoaFeed");
+        vm.expectRevert(ChainlinkToOracleAdapter.InvalidFeed.selector);
+        new ChainlinkToOracleAdapter(eoa);
+    }
 }
