@@ -21,7 +21,7 @@ contract ChainlinkToOracleAdapter is IOracle {
     AggregatorV3Interface public immutable feed;
 
     constructor(address feedParam) {
-        if (feedParam == address(0)) revert InvalidFeed();
+        if (feedParam == address(0) || feedParam.code.length == 0) revert InvalidFeed();
         feed = AggregatorV3Interface(feedParam);
     }
 
