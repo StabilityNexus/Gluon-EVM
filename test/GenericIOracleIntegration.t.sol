@@ -164,6 +164,31 @@ contract GenericIOracleIntegrationTest is Test {
         assertEq(reactor.protonPriceInPeggedAsset(), 0);
     }
 
+    function testFusionUsesCachedPriceWhenOracleReportsZero() public {
+        GenericMockOracle oracle = new GenericMockOracle(1e18);
+        StableCoinReactor reactor = _deployReactor(address(oracle));
+
+        address user = makeAddr("zeroPriceFusionUser");
+        _fundAndFission(reactor, user, 100e18);
+
+        oracle.setValue(0);
+
+        // adjustPeg() cannot act at a zero price, so it offers no way out.
+        uint256 alphaBefore = reactor.alpha();
+        reactor.adjustPeg();
+        assertEq(reactor.alpha(), alphaBefore);
+
+        uint256 balanceBefore = baseToken.balanceOf(user);
+        uint256 reserveBefore = reactor.reserve();
+
+        vm.prank(user);
+        reactor.fusion(10e18, user);
+
+        assertEq(baseToken.balanceOf(user) - balanceBefore, 10e18);
+        assertEq(reserveBefore - reactor.reserve(), 10e18);
+        assertEq(reactor.lastSuccessfulBasePrice(), 1e18);
+    }
+
     function _deployReactor(address oracleAddress) internal returns (StableCoinReactor) {
         baseToken.mint(address(this), INITIAL_RESERVE);
         baseToken.approve(address(factory), INITIAL_RESERVE);

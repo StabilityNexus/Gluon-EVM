@@ -436,6 +436,9 @@ contract StableCoinReactor is ReentrancyGuard {
         if (neutronSupplyTotal == 0 || protonSupplyTotal == 0) revert EmptySupply();
 
         uint256 basePrice = _readAndCacheBasePrice();
+        // A live zero price is as unusable as a revert: without this fallback the ratio check
+        // below would read 0 and lock every withdrawal while adjustPeg() cannot act at zero.
+        if (basePrice == 0) basePrice = lastSuccessfulBasePrice;
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyTotal, basePrice);
         _requireOperatingRange(reserveRatio);
 

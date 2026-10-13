@@ -187,6 +187,38 @@ contract OrbOracleIntegrationTest is Test {
         assertEq(reserveBefore - reactor.reserve(), fusionAmount);
     }
 
+    function testFusionSucceedsWhileOrbReportsZero() public {
+        reactor = _deployReactor();
+
+        address user = makeAddr("zeroFusionUser");
+        uint256 fissionAmount = 100e18;
+        uint256 fusionAmount = 10e18;
+
+        baseToken.mint(user, fissionAmount);
+
+        vm.startPrank(user);
+        baseToken.approve(address(reactor), fissionAmount);
+        reactor.fission(fissionAmount, user);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 1);
+
+        vm.prank(reporter);
+        orbOracle.submitValue(0);
+
+        // The oracle answers zero rather than reverting, so the revert fallback never triggers.
+        assertEq(orbOracle.readValue(), 0);
+
+        uint256 userBaseBefore = baseToken.balanceOf(user);
+        uint256 reserveBefore = reactor.reserve();
+
+        vm.prank(user);
+        reactor.fusion(fusionAmount, user);
+
+        assertEq(baseToken.balanceOf(user) - userBaseBefore, fusionAmount);
+        assertEq(reserveBefore - reactor.reserve(), fusionAmount);
+    }
+
     function testTransmutationUsesCachedPriceWhenOrbBlacklistsReactor() public {
         // A lower critical ratio leaves headroom for beta+, which mints Neutron and therefore
         // lowers the reserve ratio. At the seeded 1.5e18 it would otherwise revert on the
