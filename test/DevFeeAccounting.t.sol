@@ -174,7 +174,7 @@ contract DevFeeAccountingTest is Test {
         vm.expectEmit(true, true, false, true, address(reactor));
         emit TransmutePlus(user, user, protonIn, expectedOut, 1e16, gross, 0, expectedDevFee);
         vm.prank(user);
-        (uint256 neutronOut, uint256 fee) = reactor.transmuteProtonToNeutron(protonIn, user);
+        (uint256 neutronOut, uint256 fee) = reactor.transmuteProtonToNeutron(protonIn, 0, user);
         assertEq(fee, 1e16);
         assertEq(neutronOut, expectedOut);
         assertEq(reactor.NEUTRON_TOKEN().balanceOf(user), nBefore + expectedOut);
@@ -190,7 +190,7 @@ contract DevFeeAccountingTest is Test {
         vm.expectEmit(true, true, false, true, address(reactor));
         emit TransmuteMinus(user, user, WAD, expectedOut, 1e16, plusVolume, gross, expectedDevFee);
         vm.prank(user);
-        (uint256 protonOut, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, user);
+        (uint256 protonOut, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, 0, user);
         assertEq(minusFee, 1e16);
         assertEq(protonOut, expectedOut);
         assertEq(reactor.reserve(), reserveBefore - expectedDevFee);
@@ -214,7 +214,7 @@ contract DevFeeAccountingTest is Test {
         uint256 userProtons = reactor.PROTON_TOKEN().balanceOf(user);
         vm.prank(user);
         vm.expectRevert(StableCoinReactor.ResultingReserveRatioBelowCritical.selector);
-        reactor.transmuteProtonToNeutron(input, user);
+        reactor.transmuteProtonToNeutron(input, 0, user);
         assertEq(reactor.reserve(), r);
         assertEq(base.balanceOf(receiver), receiverBefore);
         assertEq(reactor.PROTON_TOKEN().balanceOf(user), userProtons);
@@ -234,7 +234,7 @@ contract DevFeeAccountingTest is Test {
         vm.expectEmit(true, true, false, true, address(reactor));
         emit TransmutePlus(user, user, 1e18, expectedOut, 1e16, gross, 0, expectedDevNative);
         vm.prank(user);
-        reactor.transmuteProtonToNeutron(1e18, user);
+        reactor.transmuteProtonToNeutron(1e18, 0, user);
         assertEq(reactor.reserve(), r - expectedDevNative);
         assertEq(base.balanceOf(receiver), before + expectedDevNative);
     }
@@ -252,7 +252,7 @@ contract DevFeeAccountingTest is Test {
         vm.expectEmit(true, true, false, true, address(reactor));
         emit TransmuteMinus(user, user, WAD, expectedOut, 0, 0, gross, 0);
         vm.prank(user);
-        reactor.transmuteNeutronToProton(WAD, user);
+        reactor.transmuteNeutronToProton(WAD, 0, user);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i; i < logs.length; ++i) {
             assertTrue(logs[i].emitter != address(base), "zero dev payment must not transfer base tokens");
@@ -298,10 +298,10 @@ contract DevFeeAccountingTest is Test {
         uint256 d = base.balanceOf(receiver);
         vm.prank(user);
         vm.expectRevert(stdError.arithmeticError);
-        reactor.transmuteNeutronToProton(1e18, user);
+        reactor.transmuteNeutronToProton(1e18, 0, user);
         vm.prank(user);
         vm.expectRevert(stdError.arithmeticError);
-        reactor.transmuteProtonToNeutron(1e18, user);
+        reactor.transmuteProtonToNeutron(1e18, 0, user);
         assertEq(reactor.reserve(), r);
         assertEq(base.balanceOf(receiver), d);
     }

@@ -100,23 +100,23 @@ contract UnsignedVolumeLedgerTest is Test {
 
     function testOppositeTradesKeepSeparateCountersAndCancelForFees() public {
         vm.startPrank(user);
-        reactor.transmuteProtonToNeutron(WAD, user);
+        reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.recordLogs();
-        (, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, user);
+        (, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, 0, user);
         vm.stopPrank();
         assertEq(minusFee, 1, "opposite direction should pay only the base fee");
         _assertVolumes(MINUS, WAD, WAD);
         vm.prank(user);
-        (, uint256 plusFee) = reactor.transmuteProtonToNeutron(WAD, user);
+        (, uint256 plusFee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
         assertEq(plusFee, 1, "equal directional volumes must cancel for fees");
     }
 
     function testFeeUsesOnlyPositiveDifferenceInItsOwnDirection() public {
         vm.startPrank(user);
-        reactor.transmuteProtonToNeutron(WAD, user);
-        reactor.transmuteNeutronToProton(2 * WAD, user);
-        (, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, user);
-        (, uint256 plusFee) = reactor.transmuteProtonToNeutron(WAD, user);
+        reactor.transmuteProtonToNeutron(WAD, 0, user);
+        reactor.transmuteNeutronToProton(2 * WAD, 0, user);
+        (, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, 0, user);
+        (, uint256 plusFee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.stopPrank();
         assertEq(minusFee, 1 + WAD / 200);
         assertEq(plusFee, 1);
@@ -125,12 +125,12 @@ contract UnsignedVolumeLedgerTest is Test {
     function testBothCountersDecayBeforeFeeCalculation() public {
         reactor = _deploy(1, WAD, WAD / 2, 100e18);
         vm.startPrank(user);
-        reactor.transmuteProtonToNeutron(4 * WAD, user);
-        reactor.transmuteNeutronToProton(2 * WAD, user);
+        reactor.transmuteProtonToNeutron(4 * WAD, 0, user);
+        reactor.transmuteNeutronToProton(2 * WAD, 0, user);
         vm.warp(block.timestamp + 1);
         uint256 gross = Math.mulDiv(WAD, reactor.protonPriceInBase(), WAD);
         vm.recordLogs();
-        (, uint256 fee) = reactor.transmuteProtonToNeutron(WAD, user);
+        (, uint256 fee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.stopPrank();
         assertEq(fee, 1 + WAD / 200);
         _assertVolumes(PLUS, 2 * WAD + gross, WAD);
@@ -139,11 +139,11 @@ contract UnsignedVolumeLedgerTest is Test {
     function testDecayRoundsEachCounterSeparately() public {
         reactor = _deploy(1, WAD, WAD / 2, 100e18);
         vm.startPrank(user);
-        reactor.transmuteProtonToNeutron(6, user);
-        reactor.transmuteNeutronToProton(3, user);
+        reactor.transmuteProtonToNeutron(6, 0, user);
+        reactor.transmuteNeutronToProton(3, 0, user);
         vm.warp(block.timestamp + 1);
         vm.recordLogs();
-        reactor.transmuteProtonToNeutron(6, user);
+        reactor.transmuteProtonToNeutron(6, 0, user);
         vm.stopPrank();
         // floor(6/2) and floor(3/2) are retained independently, then the new 6 is added.
         _assertVolumes(PLUS, 9, 1);
@@ -152,12 +152,12 @@ contract UnsignedVolumeLedgerTest is Test {
     function testZeroRetentionClearsBothCountersAfterTimeElapses() public {
         reactor = _deploy(1, WAD, 0, 100e18);
         vm.startPrank(user);
-        reactor.transmuteProtonToNeutron(4 * WAD, user);
-        reactor.transmuteNeutronToProton(2 * WAD, user);
+        reactor.transmuteProtonToNeutron(4 * WAD, 0, user);
+        reactor.transmuteNeutronToProton(2 * WAD, 0, user);
         vm.warp(block.timestamp + 1);
         uint256 gross = Math.mulDiv(WAD, reactor.protonPriceInBase(), WAD);
         vm.recordLogs();
-        (, uint256 fee) = reactor.transmuteProtonToNeutron(WAD, user);
+        (, uint256 fee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.stopPrank();
         assertEq(fee, 1);
         _assertVolumes(PLUS, gross, 0);
@@ -166,21 +166,21 @@ contract UnsignedVolumeLedgerTest is Test {
     function testZeroRetentionDoesNotDecayWithinSameTimestamp() public {
         reactor = _deploy(1, WAD, 0, 100e18);
         vm.startPrank(user);
-        reactor.transmuteProtonToNeutron(WAD, user);
+        reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.recordLogs();
-        reactor.transmuteNeutronToProton(WAD, user);
+        reactor.transmuteNeutronToProton(WAD, 0, user);
         vm.stopPrank();
         _assertVolumes(MINUS, WAD, WAD);
     }
 
     function testFullRetentionKeepsBothCountersAcrossTime() public {
         vm.startPrank(user);
-        reactor.transmuteProtonToNeutron(WAD, user);
-        reactor.transmuteNeutronToProton(WAD, user);
+        reactor.transmuteProtonToNeutron(WAD, 0, user);
+        reactor.transmuteNeutronToProton(WAD, 0, user);
         vm.warp(block.timestamp + 365 days);
         uint256 gross = Math.mulDiv(WAD, reactor.protonPriceInBase(), WAD);
         vm.recordLogs();
-        reactor.transmuteProtonToNeutron(WAD, user);
+        reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.stopPrank();
         _assertVolumes(PLUS, WAD + gross, WAD);
     }
@@ -188,7 +188,7 @@ contract UnsignedVolumeLedgerTest is Test {
     function _prepareSignedBoundary() private {
         reactor = _deploy(1, WAD, WAD / 2, 1e77);
         vm.prank(user);
-        reactor.transmuteNeutronToProton(FIRST_TRADE, user);
+        reactor.transmuteNeutronToProton(FIRST_TRADE, 0, user);
         oracle.setValue(WAD / 2);
         assertEq(reactor.neutronPriceInBase(), 2 * WAD);
     }
@@ -198,7 +198,7 @@ contract UnsignedVolumeLedgerTest is Test {
         uint256 secondTrade = ((uint256(1) << 255) - FIRST_TRADE) / 2;
         vm.recordLogs();
         vm.prank(user);
-        reactor.transmuteNeutronToProton(secondTrade, user);
+        reactor.transmuteNeutronToProton(secondTrade, 0, user);
         _assertVolumes(MINUS, 0, uint256(1) << 255);
 
         oracle.setValue(3e17);
@@ -206,7 +206,7 @@ contract UnsignedVolumeLedgerTest is Test {
         uint256 gross = Math.mulDiv(WAD, reactor.neutronPriceInBase(), WAD);
         vm.recordLogs();
         vm.prank(user);
-        (uint256 output, uint256 fee) = reactor.transmuteNeutronToProton(WAD, user);
+        (uint256 output, uint256 fee) = reactor.transmuteNeutronToProton(WAD, 0, user);
         assertGt(output, 0);
         assertGt(fee, 0);
         _assertVolumes(MINUS, 0, (uint256(1) << 254) + gross);
@@ -222,7 +222,7 @@ contract UnsignedVolumeLedgerTest is Test {
         uint256 secondTrade = ((uint256(1) << 255) - FIRST_TRADE) / 2 + 1;
         vm.recordLogs();
         vm.prank(user);
-        reactor.transmuteNeutronToProton(secondTrade, user);
+        reactor.transmuteNeutronToProton(secondTrade, 0, user);
         _assertVolumes(MINUS, 0, (uint256(1) << 255) + 2);
     }
 
@@ -230,15 +230,15 @@ contract UnsignedVolumeLedgerTest is Test {
         reactor = _deploy(1, 1, WAD, 1e77);
         vm.startPrank(user);
         for (uint256 i; i < 3; ++i) {
-            (uint256 neutronOut,) = reactor.transmuteProtonToNeutron(3e76, user);
-            reactor.transmuteNeutronToProton(neutronOut, user);
+            (uint256 neutronOut,) = reactor.transmuteProtonToNeutron(3e76, 0, user);
+            reactor.transmuteNeutronToProton(neutronOut, 0, user);
         }
         uint256 neutronBefore = reactor.NEUTRON_TOKEN().balanceOf(user);
         uint256 protonBefore = reactor.PROTON_TOKEN().balanceOf(user);
         uint256 neutronSupply = reactor.NEUTRON_TOKEN().totalSupply();
         uint256 protonSupply = reactor.PROTON_TOKEN().totalSupply();
         vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
-        reactor.transmuteProtonToNeutron(3e76, user);
+        reactor.transmuteProtonToNeutron(3e76, 0, user);
         vm.stopPrank();
         assertEq(reactor.NEUTRON_TOKEN().balanceOf(user), neutronBefore);
         assertEq(reactor.PROTON_TOKEN().balanceOf(user), protonBefore);
@@ -246,7 +246,7 @@ contract UnsignedVolumeLedgerTest is Test {
         assertEq(reactor.PROTON_TOKEN().totalSupply(), protonSupply);
         // Ordinary later operations remain available after the rejected addition.
         vm.prank(user);
-        reactor.transmuteProtonToNeutron(WAD, user);
+        reactor.transmuteProtonToNeutron(WAD, 0, user);
     }
 
     function testZeroVolumeCoefficientPreservesConfiguredBaseFee() public {
@@ -268,9 +268,9 @@ contract UnsignedVolumeLedgerTest is Test {
         assertEq(target.fee(0, type(uint256).max), 0);
         reactor = _deploy(0, 0, WAD, 100e18);
         vm.startPrank(user);
-        (, uint256 plusFee) = reactor.transmuteProtonToNeutron(WAD, user);
+        (, uint256 plusFee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.recordLogs();
-        (, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, user);
+        (, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, 0, user);
         vm.stopPrank();
         assertEq(plusFee, 0);
         assertEq(minusFee, 0);

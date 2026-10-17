@@ -567,6 +567,7 @@ Burns the proportional Proton and Neutron amounts and returns the base asset.
 ```solidity
 function transmuteProtonToNeutron(
     uint256 protonIn,
+    uint256 minNeutronOut,
     address to
 ) external returns (uint256 neutronOut, uint256 feeWad)
 ```
@@ -578,11 +579,18 @@ Burns Proton and mints the corresponding Neutron amount after applying the beta 
 ```solidity
 function transmuteNeutronToProton(
     uint256 neutronIn,
+    uint256 minProtonOut,
     address to
 ) external returns (uint256 protonOut, uint256 feeWad)
 ```
 
 Burns Neutron and mints the corresponding Proton amount after applying the beta fee.
+
+Both transmutations revert with `AmountTooSmall` if the minted amount is below
+the caller's minimum, before burning input tokens or paying dev fees. Minimums use
+raw output-token units and apply after both fees. Passing zero opts out of the
+minimum; the existing zero-output check still applies. A zero-price no-op remains
+available with a zero minimum, but reverts when a positive minimum is requested.
 
 ### Protocol and Dev Fees
 

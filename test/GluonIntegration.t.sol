@@ -437,10 +437,10 @@ contract GluonIntegrationTest is Test {
 
         // First beta+ establishes the same positive volume ledger in both reactors.
         vm.prank(user18);
-        (uint256 firstOut18, uint256 firstFee18) = reactor.transmuteProtonToNeutron(1e18, user18);
+        (uint256 firstOut18, uint256 firstFee18) = reactor.transmuteProtonToNeutron(1e18, 0, user18);
 
         vm.prank(user6);
-        (uint256 firstOut6, uint256 firstFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, user6);
+        (uint256 firstOut6, uint256 firstFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, 0, user6);
 
         assertEq(firstFee18, 0, "first beta+ fee should start at zero");
         assertEq(firstFee6, firstFee18, "first beta+ fee should match");
@@ -448,10 +448,10 @@ contract GluonIntegrationTest is Test {
 
         // The second beta+ exercises phi1 * decayedVolumeBase / normalizedReserve.
         vm.prank(user18);
-        (uint256 secondOut18, uint256 secondFee18) = reactor.transmuteProtonToNeutron(1e18, user18);
+        (uint256 secondOut18, uint256 secondFee18) = reactor.transmuteProtonToNeutron(1e18, 0, user18);
 
         vm.prank(user6);
-        (uint256 secondOut6, uint256 secondFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, user6);
+        (uint256 secondOut6, uint256 secondFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, 0, user6);
 
         assertGt(secondFee18, 0, "dynamic beta fee should be nonzero");
         assertEq(secondFee6, secondFee18, "dynamic beta fee should be decimal-independent");
@@ -631,19 +631,19 @@ contract GluonIntegrationTest is Test {
         mockFeed.setPrice(120_000_000);
 
         vm.prank(user18);
-        (uint256 neutronOut18, uint256 plusFee18) = reactor.transmuteProtonToNeutron(1e18, user18);
+        (uint256 neutronOut18, uint256 plusFee18) = reactor.transmuteProtonToNeutron(1e18, 0, user18);
 
         vm.prank(user6);
-        (uint256 neutronOut6, uint256 plusFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, user6);
+        (uint256 neutronOut6, uint256 plusFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, 0, user6);
 
         assertEq(neutronOut6, neutronOut18, "beta+ output should be decimal-independent");
         assertEq(plusFee6, plusFee18, "beta+ fee should be decimal-independent");
 
         vm.prank(user18);
-        (uint256 protonOut18, uint256 minusFee18) = reactor.transmuteNeutronToProton(1e18, user18);
+        (uint256 protonOut18, uint256 minusFee18) = reactor.transmuteNeutronToProton(1e18, 0, user18);
 
         vm.prank(user6);
-        (uint256 protonOut6, uint256 minusFee6) = sixDecimalReactor.transmuteNeutronToProton(1e18, user6);
+        (uint256 protonOut6, uint256 minusFee6) = sixDecimalReactor.transmuteNeutronToProton(1e18, 0, user6);
 
         assertEq(protonOut6, protonOut18, "beta- output should be decimal-independent");
         assertEq(minusFee6, minusFee18, "beta- fee should be decimal-independent");
@@ -734,10 +734,10 @@ contract GluonIntegrationTest is Test {
         vm.startPrank(user);
 
         vm.expectRevert(StableCoinReactor.AmountTooSmall.selector);
-        reactor.transmuteProtonToNeutron(1e18, user);
+        reactor.transmuteProtonToNeutron(1e18, 0, user);
 
         vm.expectRevert(StableCoinReactor.AmountTooSmall.selector);
-        reactor.transmuteNeutronToProton(1e18, user);
+        reactor.transmuteNeutronToProton(1e18, 0, user);
 
         vm.stopPrank();
     }
@@ -778,7 +778,7 @@ contract GluonIntegrationTest is Test {
         uint256 protonBefore = reactor.PROTON_TOKEN().balanceOf(user);
 
         vm.prank(user);
-        (uint256 neutronOut, uint256 feeWad) = reactor.transmuteProtonToNeutron(protonIn, user);
+        (uint256 neutronOut, uint256 feeWad) = reactor.transmuteProtonToNeutron(protonIn, 0, user);
 
         assertEq(feeWad, 0, "unexpected fee");
         assertGt(neutronOut, 0, "no neutron minted");
@@ -798,7 +798,7 @@ contract GluonIntegrationTest is Test {
         uint256 protonBefore = reactor.PROTON_TOKEN().balanceOf(user);
 
         vm.prank(user);
-        (uint256 protonOut, uint256 feeWad) = reactor.transmuteNeutronToProton(neutronIn, user);
+        (uint256 protonOut, uint256 feeWad) = reactor.transmuteNeutronToProton(neutronIn, 0, user);
 
         assertEq(feeWad, 0, "unexpected fee");
         assertGt(protonOut, 0, "no proton minted");
@@ -1488,10 +1488,10 @@ contract GluonIntegrationTest is Test {
         reactor.fusion(1e18, user);
 
         vm.expectRevert(expectedError);
-        reactor.transmuteProtonToNeutron(1e18, user);
+        reactor.transmuteProtonToNeutron(1e18, 0, user);
 
         vm.expectRevert(expectedError);
-        reactor.transmuteNeutronToProton(1e18, user);
+        reactor.transmuteNeutronToProton(1e18, 0, user);
 
         vm.stopPrank();
     }
@@ -1517,10 +1517,10 @@ contract GluonIntegrationTest is Test {
         reactor.fusion(1e18, user);
 
         vm.expectRevert(expectedError);
-        reactor.transmuteProtonToNeutron(1e18, user);
+        reactor.transmuteProtonToNeutron(1e18, 0, user);
 
         vm.expectRevert(expectedError);
-        reactor.transmuteNeutronToProton(1e18, user);
+        reactor.transmuteNeutronToProton(1e18, 0, user);
 
         vm.stopPrank();
     }
@@ -1537,8 +1537,8 @@ contract GluonIntegrationTest is Test {
         uint256 neutronSupplyBefore = reactor.NEUTRON_TOKEN().totalSupply();
 
         vm.startPrank(user);
-        (uint256 neutronOut, uint256 plusFee) = reactor.transmuteProtonToNeutron(1e18, user);
-        (uint256 protonOut, uint256 minusFee) = reactor.transmuteNeutronToProton(1e18, user);
+        (uint256 neutronOut, uint256 plusFee) = reactor.transmuteProtonToNeutron(1e18, 0, user);
+        (uint256 protonOut, uint256 minusFee) = reactor.transmuteNeutronToProton(1e18, 0, user);
         vm.stopPrank();
 
         assertEq(neutronOut, 0);
@@ -1578,8 +1578,8 @@ contract GluonIntegrationTest is Test {
         uint256 neutronSupplyBefore = boundaryReactor.NEUTRON_TOKEN().totalSupply();
 
         vm.startPrank(user);
-        (uint256 neutronOut, uint256 plusFee) = boundaryReactor.transmuteProtonToNeutron(1e18, user);
-        (uint256 protonOut, uint256 minusFee) = boundaryReactor.transmuteNeutronToProton(1e18, user);
+        (uint256 neutronOut, uint256 plusFee) = boundaryReactor.transmuteProtonToNeutron(1e18, 0, user);
+        (uint256 protonOut, uint256 minusFee) = boundaryReactor.transmuteNeutronToProton(1e18, 0, user);
         vm.stopPrank();
 
         assertEq(neutronOut, 0);
@@ -1610,7 +1610,7 @@ contract GluonIntegrationTest is Test {
 
         vm.prank(user);
         vm.expectRevert(StableCoinReactor.ResultingReserveRatioBelowCritical.selector);
-        reactor.transmuteProtonToNeutron(20e18, user);
+        reactor.transmuteProtonToNeutron(20e18, 0, user);
 
         assertEq(
             reactor.PROTON_TOKEN().balanceOf(user), protonBalanceBefore, "reverted beta+ must restore proton balance"
@@ -1636,7 +1636,7 @@ contract GluonIntegrationTest is Test {
         assertLe(ratioBefore, reactor.UPPER_RESERVE_RATIO(), "precondition: beta- must start inside operating range");
 
         vm.prank(user);
-        reactor.transmuteNeutronToProton(40e18, user);
+        reactor.transmuteNeutronToProton(40e18, 0, user);
 
         uint256 ratioAfter = reactor.reserveRatioPeggedAsset();
 

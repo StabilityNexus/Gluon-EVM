@@ -84,8 +84,8 @@ contract ImmutableBetaTest is Test {
         _fund(reactor);
 
         vm.startPrank(user);
-        (uint256 neutronOut, uint256 plusFee) = reactor.transmuteProtonToNeutron(1e18, user);
-        (uint256 protonOut, uint256 minusFee) = reactor.transmuteNeutronToProton(1e18, user);
+        (uint256 neutronOut, uint256 plusFee) = reactor.transmuteProtonToNeutron(1e18, 0, user);
+        (uint256 protonOut, uint256 minusFee) = reactor.transmuteNeutronToProton(1e18, 0, user);
         vm.stopPrank();
 
         assertGt(neutronOut, 0);
@@ -101,13 +101,13 @@ contract ImmutableBetaTest is Test {
         _fund(decayed);
 
         vm.startPrank(user);
-        retained.transmuteProtonToNeutron(1e18, user);
-        decayed.transmuteProtonToNeutron(1e18, user);
+        retained.transmuteProtonToNeutron(1e18, 0, user);
+        decayed.transmuteProtonToNeutron(1e18, 0, user);
         vm.stopPrank();
         vm.warp(block.timestamp + 1);
         vm.startPrank(user);
-        (, uint256 retainedFee) = retained.transmuteProtonToNeutron(1e18, user);
-        (, uint256 decayedFee) = decayed.transmuteProtonToNeutron(1e18, user);
+        (, uint256 retainedFee) = retained.transmuteProtonToNeutron(1e18, 0, user);
+        (, uint256 decayedFee) = decayed.transmuteProtonToNeutron(1e18, 0, user);
         vm.stopPrank();
 
         assertGt(retainedFee, 0);
