@@ -223,7 +223,7 @@ contract OrbOracleIntegrationTest is Test {
         uint256 protonBefore = reactor.PROTON_TOKEN().balanceOf(user);
 
         vm.prank(user);
-        (uint256 neutronOut,) = reactor.transmuteProtonToNeutron(1e18, user);
+        (uint256 neutronOut,) = reactor.transmuteProtonToNeutron(1e18, 0, user);
 
         assertGt(neutronOut, 0, "beta+ produced no Neutron");
         assertEq(reactor.PROTON_TOKEN().balanceOf(user), protonBefore - 1e18, "beta+ burned the wrong Proton amount");
@@ -235,7 +235,7 @@ contract OrbOracleIntegrationTest is Test {
         uint256 protonAfterPlus = reactor.PROTON_TOKEN().balanceOf(user);
 
         vm.prank(user);
-        (uint256 protonOut,) = reactor.transmuteNeutronToProton(1e18, user);
+        (uint256 protonOut,) = reactor.transmuteNeutronToProton(1e18, 0, user);
 
         assertGt(protonOut, 0, "beta- produced no Proton");
         assertEq(
