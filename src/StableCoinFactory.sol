@@ -11,7 +11,7 @@ contract StableCoinFactory {
     event ReactorDeployed(
         address indexed reactor,
         address indexed base,
-        address indexed treasury,
+        address indexed dev,
         string vaultName,
         string baseAssetName,
         string baseAssetSymbol,
@@ -38,7 +38,7 @@ contract StableCoinFactory {
     error EmptyProtonSymbol();
     error InvalidBase();
     error InvalidOracle();
-    error InvalidTreasury();
+    error InvalidDev();
     error InvalidFissionFee();
     error InvalidFusionFee();
     error InvalidCriticalReserveRatio();
@@ -58,7 +58,7 @@ contract StableCoinFactory {
         address oracleParam,
         string memory protonNameParam,
         string memory protonSymbolParam,
-        address treasuryParam,
+        address devParam,
         uint256 fissionFeeParam,
         uint256 fusionFeeParam,
         uint256 criticalReserveRatioWadParam,
@@ -76,7 +76,7 @@ contract StableCoinFactory {
         if (bytes(protonSymbolParam).length == 0) revert EmptyProtonSymbol();
         if (baseTokenParam == address(0)) revert InvalidBase();
         if (oracleParam == address(0)) revert InvalidOracle();
-        if (treasuryParam == address(0)) revert InvalidTreasury();
+        if (devParam == address(0)) revert InvalidDev();
         if (fissionFeeParam >= 1e18) revert InvalidFissionFee();
         if (fusionFeeParam >= 1e18) revert InvalidFusionFee();
         if (criticalReserveRatioWadParam < 1e18) revert InvalidCriticalReserveRatio();
@@ -92,7 +92,7 @@ contract StableCoinFactory {
             oracleParam, // Pass the adapter address
             protonNameParam,
             protonSymbolParam,
-            treasuryParam,
+            devParam,
             fissionFeeParam,
             fusionFeeParam,
             criticalReserveRatioWadParam,
@@ -122,7 +122,7 @@ contract StableCoinFactory {
         emit ReactorDeployed(
             reactorAddress,
             baseTokenParam,
-            treasuryParam,
+            devParam,
             vaultNameParam,
             baseAssetNameParam,
             baseAssetSymbolParam,
