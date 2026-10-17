@@ -284,7 +284,7 @@ contract GluonIntegrationTest is Test {
 
         while (
             (target.reserveRatioPeggedAsset() < target.CRITICAL_RESERVE_RATIO()
-                    || target.reserveRatioPeggedAsset() > target.UPPER_RESERVE_RATIO()) && iterations < 100
+                    || target.reserveRatioPeggedAsset() > target.UPPER_RESERVE_RATIO()) && iterations < 200
         ) {
             target.adjustPeg();
             iterations++;
@@ -1090,11 +1090,73 @@ contract GluonIntegrationTest is Test {
         reactor.adjustPeg();
     }
 
-    function testDeploymentRejectsInitialRatioBelowCritical() public {
+    function testDeploymentRejectsCriticalRatioAboveInitialTarget() public {
         _prepareInitialReserve();
 
-        vm.expectRevert(StableCoinReactor.InvalidInitialReserve.selector);
-        _deployReactorWithCriticalRatio(address(adapter), 16e17);
+        vm.expectRevert(StableCoinReactor.InvalidCriticalReserveRatio.selector);
+        _deployReactorWithCriticalRatio(address(adapter), 15e17 + 1);
+    }
+
+    function testDeploymentRejectsNarrowRangeEvenWithRetainedFissionFees() public {
+        _prepareInitialReserve();
+
+        // A 25% retained fission fee previously allowed initialization at 200%,
+        // even with a critical ratio only one wei below the upper bound.
+        vm.expectRevert(StableCoinReactor.InvalidCriticalReserveRatio.selector);
+        factory.deployReactor(
+            "Gluon Vault",
+            "USD Coin",
+            "USDC",
+            "Gluon USD",
+            "GUSD",
+            address(baseToken),
+            address(adapter),
+            "Gluon Gov",
+            "GOV",
+            dev,
+            0,
+            25e16,
+            0,
+            2e18 - 1,
+            1e18,
+            0,
+            0,
+            1e18
+        );
+    }
+
+    function testFuzzRejectedCriticalRatioLeavesFactoryAndFundsUnchanged(uint256 criticalRatio) public {
+        criticalRatio = bound(criticalRatio, 15e17 + 1, 2e18 - 1);
+        _prepareInitialReserve();
+        uint256 balanceBefore = baseToken.balanceOf(address(this));
+        uint256 countBefore = factory.getDeployedReactorsCount();
+
+        vm.expectRevert(StableCoinReactor.InvalidCriticalReserveRatio.selector);
+        _deployReactorWithCriticalRatio(address(adapter), criticalRatio);
+
+        assertEq(baseToken.balanceOf(address(this)), balanceBefore);
+        assertEq(baseToken.balanceOf(address(factory)), 0);
+        assertEq(baseToken.allowance(address(this), address(factory)), INITIAL_RESERVE);
+        assertEq(factory.getDeployedReactorsCount(), countBefore);
+    }
+
+    function testFuzzSupportedCriticalRatioRecoversAfterPriceChanges(uint256 criticalRatio) public {
+        criticalRatio = bound(criticalRatio, 1e18, 15e17);
+        _prepareInitialReserve();
+        reactor = _deployReactorWithCriticalRatio(address(adapter), criticalRatio);
+        assertEq(reactor.CRITICAL_RESERVE_RATIO(), criticalRatio);
+
+        mockFeed.setPrice(40_000_000);
+        assertLt(reactor.reserveRatioPeggedAsset(), criticalRatio);
+        _adjustIntoOperatingRange();
+
+        mockFeed.setPrice(200_000_000);
+        assertGt(reactor.reserveRatioPeggedAsset(), reactor.UPPER_RESERVE_RATIO());
+        _adjustIntoOperatingRange();
+
+        mockFeed.setPrice(100_000_000);
+        _adjustIntoOperatingRange();
+        _fundAndFission(makeAddr("recovered range user"), 1e18);
     }
 
     function testDeploymentRejectsRoundedInitialRatioAboveUpperBound() public {
