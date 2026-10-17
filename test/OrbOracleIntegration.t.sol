@@ -24,7 +24,7 @@ contract OrbOracleIntegrationTest is Test {
     Oracle internal orbOracle;
 
     address internal reporter = makeAddr("reporter");
-    address internal treasury = makeAddr("treasury");
+    address internal dev = makeAddr("dev");
 
     function setUp() public {
         factory = new StableCoinFactory();
@@ -308,7 +308,8 @@ contract OrbOracleIntegrationTest is Test {
             address(orbOracle),
             "Gluon Proton",
             "PRO",
-            treasury,
+            dev,
+            0,
             0,
             0,
             criticalReserveRatio,

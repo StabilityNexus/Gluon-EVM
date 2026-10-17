@@ -10,7 +10,7 @@ contract ImmutableBetaTest is Test {
     StableCoinFactory internal factory;
     GenericMockERC20 internal baseToken;
     GenericMockOracle internal oracle;
-    address internal treasury = makeAddr("treasury");
+    address internal dev = makeAddr("dev");
     address internal user = makeAddr("user");
 
     function setUp() public {
@@ -63,16 +63,16 @@ contract ImmutableBetaTest is Test {
         assertEq(factory.getDeployedReactorsCount(), 2);
     }
 
-    function testTreasuryAndDeployerCannotUseRemovedSetter() public {
+    function testDevAndDeployerCannotUseRemovedSetter() public {
         StableCoinReactor reactor = _deploy(user, 1e16, 5e17, 999e15);
         bytes memory data = abi.encodeWithSignature("setBetaParams(uint256,uint256,uint256)", 0, 0, 1e18);
 
-        vm.prank(treasury);
-        (bool treasurySuccess,) = address(reactor).call(data);
+        vm.prank(dev);
+        (bool devSuccess,) = address(reactor).call(data);
         vm.prank(user);
         (bool deployerSuccess,) = address(reactor).call(data);
 
-        assertFalse(treasurySuccess);
+        assertFalse(devSuccess);
         assertFalse(deployerSuccess);
         assertEq(reactor.betaPhi0(), 1e16);
         assertEq(reactor.betaPhi1(), 5e17);
@@ -139,7 +139,8 @@ contract ImmutableBetaTest is Test {
                 address(oracle),
                 "Proton",
                 "P",
-                treasury,
+                dev,
+                0,
                 0,
                 0,
                 12e17,

@@ -10,7 +10,7 @@ import {GenericMockERC20, GenericMockOracle} from "./GenericIOracleIntegration.t
 contract BetaFeeHarness is StableCoinReactor {
     constructor(address base, address oracle, uint256 phi0, uint256 phi1)
         StableCoinReactor(
-            "Fee", "Base", "B", "Peg", "N", base, oracle, "Proton", "P", address(1), 0, 0, 1e18, phi0, phi1, 1e18
+            "Fee", "Base", "B", "Peg", "N", base, oracle, "Proton", "P", address(1), 0, 0, 0, 1e18, phi0, phi1, 1e18
         )
     {}
 
@@ -22,9 +22,10 @@ contract BetaFeeHarness is StableCoinReactor {
 contract UnsignedVolumeLedgerTest is Test {
     uint256 private constant WAD = 1e18;
     uint256 private constant FIRST_TRADE = 38 * 1e75;
-    bytes32 private constant PLUS = keccak256("TransmutePlus(address,address,uint256,uint256,uint256,uint256,uint256)");
+    bytes32 private constant PLUS =
+        keccak256("TransmutePlus(address,address,uint256,uint256,uint256,uint256,uint256,uint256)");
     bytes32 private constant MINUS =
-        keccak256("TransmuteMinus(address,address,uint256,uint256,uint256,uint256,uint256)");
+        keccak256("TransmuteMinus(address,address,uint256,uint256,uint256,uint256,uint256,uint256)");
     StableCoinFactory private factory;
     GenericMockERC20 private base;
     GenericMockOracle private oracle;
@@ -58,6 +59,7 @@ contract UnsignedVolumeLedgerTest is Test {
                 address(1),
                 0,
                 0,
+                0,
                 WAD,
                 100e18,
                 phi0,
@@ -83,7 +85,7 @@ contract UnsignedVolumeLedgerTest is Test {
                 entries[i].emitter == address(reactor) && entries[i].topics.length > 0
                     && entries[i].topics[0] == signature
             ) {
-                (,,, plus, minus) = abi.decode(entries[i].data, (uint256, uint256, uint256, uint256, uint256));
+                (,,, plus, minus,) = abi.decode(entries[i].data, (uint256, uint256, uint256, uint256, uint256, uint256));
                 found = true;
             }
         }

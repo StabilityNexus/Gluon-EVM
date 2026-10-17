@@ -10,7 +10,7 @@ contract PegFactorRegressionTest is Test {
     StableCoinFactory private factory;
     GenericMockERC20 private base;
     address private user = makeAddr("peg regression user");
-    address private treasury = makeAddr("peg regression treasury");
+    address private dev = makeAddr("peg regression dev");
 
     function setUp() public {
         factory = new StableCoinFactory();
@@ -35,7 +35,8 @@ contract PegFactorRegressionTest is Test {
                 address(oracle),
                 "Proton",
                 "P",
-                treasury,
+                dev,
+                0,
                 0,
                 0,
                 15e17,

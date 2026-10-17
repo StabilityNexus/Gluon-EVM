@@ -47,7 +47,7 @@ require(oracle != address(0), "invalid oracle");
 ### 3. State & Constructor Validations
 Move static immutable validations into constructors where appropriate instead of repeatedly checking them inside view or runtime functions.
 
-For Gluon reactors, configuration such as oracle addresses, treasury addresses, fees, reserve-ratio parameters, and required metadata should be validated when the reactor is created.
+For Gluon reactors, configuration such as oracle addresses, dev and dev fee receiver addresses, fees, reserve-ratio parameters, and required metadata should be validated when the reactor is created.
 
 ---
 

@@ -48,7 +48,7 @@ Each reactor is configured with:
 
 - a reserve or base ERC-20 asset
 - an `IOracle`-compatible price source
-- treasury settings
+- dev authority, dev fee receiver and dev fee rate
 - fission and fusion fees
 - a critical reserve-ratio parameter
 - metadata for the reserve, pegged asset, Proton, and Neutron tokens
@@ -96,7 +96,7 @@ Within the reactor, conversion happens only where native amounts enter or leave:
 The reactor:
 
 1. transfers the base asset from the user
-2. sends any configured fission fee to the treasury
+2. transfers the separate dev fee to the dev fee receiver and retains the fission fee in the reserve
 3. calculates the Proton and Neutron outputs
 4. mints both assets to the selected recipient
 
@@ -112,7 +112,7 @@ The reactor:
 2. burns both tokens from the user
 3. applies the configured fusion fee
 4. returns the remaining base asset to the selected recipient
-5. sends the fee to the treasury
+5. transfers the separate dev fee to the dev fee receiver; the fusion fee stays in the reserve
 
 ### Transmutation
 
@@ -173,7 +173,7 @@ Freshness timeouts should not be added as a routine oracle bug fix.
 The system has two main parts:
 
 1. the **reactor flow** for user interactions and token mint/burn logic
-2. the **deployment and oracle flow** for factory deployment, pricing, and treasury fee collection
+2. the **deployment and oracle flow** for factory deployment, pricing, and dev fee collection
 
 ### Reactor Flow
 
@@ -204,7 +204,7 @@ flowchart TD
     C[Chainlink Feed]
     A[ChainlinkToOracleAdapter]
     R[StableCoinReactor]
-    T[Treasury]
+    T[Dev Fee Receiver]
 
     F --> R
     C --> A
@@ -216,8 +216,8 @@ flowchart TD
 - `StableCoinFactory` deploys new `StableCoinReactor` instances.
 - `ChainlinkToOracleAdapter` reads data from the `Chainlink Feed`.
 - The adapter provides WAD-normalized oracle values to the reactor.
-- The `Treasury` receives protocol fees.
-- The treasury can also manage beta-related reactor parameters.
+- The `devFeeReceiver` receives the separate dev fee.
+- The `dev` can update that receiver and transfer its own role through a two-step proposal and acceptance.
 
 ### Core Contracts
 
@@ -496,8 +496,9 @@ The factory first receives the reserve from the caller, then approves the newly 
 reactor to use the amount actually received. The factory calls `initialFission(amountIn)`, which
 uses the same internal fission path as normal user fission. The resulting Neutron and
 Proton seed supplies are minted to the reactor itself and remain locked as protocol
-backing. The configured fission fee also applies during this initial fission, and the
-seed targets an initial reserve ratio of `15e17`.
+backing. Fission and dev fees also apply during this initial fission. Seed issuance
+uses `15e17`; retained fission fees increase the actual initial reserve ratio.
+Initialization rejects a resulting ratio outside the operating range.
 
 A reactor is configured with:
 
@@ -511,7 +512,8 @@ baseToken
 oracle
 protonName
 protonSymbol
-treasury
+dev
+devFee
 fissionFee
 fusionFee
 criticalReserveRatio
@@ -528,9 +530,9 @@ The reactor validates that:
 - the base token address is not zero
 - the oracle address is not zero
 - the oracle address contains deployed contract code
-- the treasury address is not zero
-- the fission fee is below `1e18`
-- the fusion fee is below `1e18`
+- the dev and dev fee receiver addresses are not zero
+- the dev fee is below `1e18`
+- each fission or fusion fee plus the dev fee is below `1e18`
 - each beta fee coefficient is at most `1e18`
 - the per-second volume retention multiplier is at most `1e18`
 - the critical reserve ratio is at least `1e18` and below the upper reserve ratio
@@ -582,11 +584,39 @@ function transmuteNeutronToProton(
 
 Burns Neutron and mints the corresponding Proton amount after applying the beta fee.
 
+### Protocol and Dev Fees
+
+Fission, fusion and beta fees stay in the reserve. A separate constructor-set
+`devFee` is charged on the same gross amount as the operation's protocol fee.
+Both fees are rounded down independently and deducted from the user's credited
+value or payout; only the dev fee is transferred to `devFeeReceiver`.
+This follows the separation of `f` and `fT` in
+[Djed's fee calculation](https://github.com/DjedAlliance/Djed-Solidity/blob/d15e0eb55376730a4a5ea60615704b7ff5d9c98a/src/Djed.sol#L162).
+
+Fission and fusion use native reserve-token units. Beta reactions calculate fees
+on their WAD-normalized gross base value; the dev payment is converted down to
+native reserve-token units. Any conversion dust stays in the reserve. Beta-plus
+checks the resulting reserve ratio after the dev payment. If the combined beta
+and dev fees leave no output, the transaction reverts without paying a fee.
+
+For Gluon deployments, pass the initial dev address
+`0x86B8f920835015c0F1b697dBe0B8b150a986eCE5`. The constructor initializes both
+`dev` and `devFeeReceiver` to that address. The WebUI supplies a fixed
+`devFee` of `1e15`, representing 0.1%.
+
+Only `dev` can call `setDevFeeReceiver(newReceiver)`, which rejects zero addresses.
+To transfer the dev role, the current dev calls `proposeDev(newDev)` and the nominee
+calls `acceptDev()`. A pending proposal can be replaced; acceptance clears it.
+Transferring dev does not change the fee receiver. Receiver changes and role transfers
+emit events. Each operation event includes its dev fee amount in native reserve-token
+units. Neither role can change the immutable fee rates,
+beta parameters or oracle.
+
 ### Immutable Beta Parameters
 
 The deployer chooses `betaPhi0`, `betaPhi1`, and `decayPerSecondWad` through the
 factory when creating each reactor. The constructor validates and stores these
-values as immutable configuration; neither the deployer nor the treasury can
+values as immutable configuration; neither the deployer nor the dev can
 change them afterwards. There is no beta-parameter setter.
 
 `betaPhi0` is the base transmutation fee and `betaPhi1` controls the volume-dependent
@@ -686,7 +716,7 @@ Before a production deployment, the project should complete:
 - external contract review
 - deployment verification
 - documented operational procedures
-- monitoring for oracle and treasury risks
+- monitoring for oracle and dev fee receiver risks
 
 To report a potential vulnerability, contact the Stability Nexus team privately through:
 
