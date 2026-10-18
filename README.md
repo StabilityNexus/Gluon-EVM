@@ -535,12 +535,16 @@ The reactor validates that:
 - each fission or fusion fee plus the dev fee is below `1e18`
 - each beta fee coefficient is at most `1e18`
 - the per-second volume retention multiplier is at most `1e18`
-- the critical reserve ratio is at least `1e18` and below the upper reserve ratio
+- the critical reserve ratio is between `1e18` and `15e17` (100%–150%), inclusive
 - the initial reserve is non-zero and can establish a valid initialized reserve state
 - the vault name is not empty
 - the base asset name and symbol are not empty
 - the pegged asset name and symbol are not empty
 - the Proton name and symbol are not empty
+
+The 150% maximum matches the creation form and leaves room below the 200% upper
+bound for peg adjustments. Extremely narrow operating ranges can contain no
+representable reserve ratio after rounding.
 
 ---
 
