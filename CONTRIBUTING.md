@@ -744,7 +744,8 @@ Oracle implementations and adapters should:
 
 - return unsigned values
 - normalize values to 18-decimal WAD format
-- reject invalid or non-positive prices
+- reject invalid prices and negative values where the source type permits them
+- define and test behavior for zero prices
 - expose value intervals through `readValueInterval()`
 - expose the latest update timestamp through `lastUpdated()`
 - expose a meaningful description
@@ -785,6 +786,9 @@ function lastUpdated() external view returns (uint256 timestamp);
 Consumers are responsible for deciding whether an oracle value is too old for their use case unless the project architecture explicitly defines otherwise.
 
 Do not add independent staleness-revert behavior inside an oracle integration without prior discussion because it can change integration semantics.
+
+Gluon's intentional staleness policy and its rationale are described in the
+[Oracle Staleness section of the README](README.md#oracle-staleness).
 
 ### Oracle Tests
 

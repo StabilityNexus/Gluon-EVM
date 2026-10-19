@@ -66,11 +66,11 @@ contract ChainlinkAdapterTest is Test {
         assertEq(adapter.lastUpdated(), block.timestamp, "wrong timestamp");
     }
 
-    function testRevertsOnZeroAnswer() public {
+    function testReturnsZeroAnswer() public {
         MockChainlinkFeed feed = new MockChainlinkFeed(8, 0);
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
-        vm.expectRevert(ChainlinkToOracleAdapter.BadValue.selector);
-        adapter.readValue();
+
+        assertEq(adapter.readValue(), 0);
     }
 
     function testRevertsOnZeroFeedAddress() public {
@@ -105,5 +105,11 @@ contract ChainlinkAdapterTest is Test {
         ChainlinkToOracleAdapter adapter = new ChainlinkToOracleAdapter(address(feed));
 
         assertEq(adapter.description(), "MOCK / USD", "wrong description");
+    }
+
+    function testRevertsOnEoaFeedAddress() public {
+        address eoa = makeAddr("eoaFeed");
+        vm.expectRevert(ChainlinkToOracleAdapter.InvalidFeed.selector);
+        new ChainlinkToOracleAdapter(eoa);
     }
 }

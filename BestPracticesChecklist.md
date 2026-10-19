@@ -27,10 +27,10 @@
 | Basics             | 8   | 8     | ✅     |
 | Change Control     | 6   | 6     | ✅     |
 | Reporting          | 8   | 8     | ✅     |
-| Quality            | 8   | 11     | 🟡     |
+| Quality            | 10   | 11     | 🟡     |
 | Security           | 9   | 9     | ✅     |
-| Analysis           | 4   | 7     | 🟡     |
-| **Total**          | **43** | **49** | **88%** |
+| Analysis           | 6   | 7     | 🟡     |
+| **Total**          | **47** | **49** | **96%** |
 ---
 
 ## 🏗️ Basics
@@ -163,11 +163,11 @@
 - [x] 🔴 **warnings** — At least one linter or compiler warning flag is enabled (ESLint, Pylint, clippy, golangci-lint, Slither for Solidity, etc.).
   - *Tool used:* Slither static analysis and Foundry compiler/lint checks. Slither was run with `slither . --exclude-dependencies`.
 
-- [ ] 🔴 **warnings_fixed** — Warnings from the linter are addressed (not suppressed without reason).
-  - *Note:* Requires a dedicated linter/static-analysis workflow before this criterion can be verified.
+- [x] 🔴 **warnings_fixed** — Warnings from the linter are addressed (not suppressed without reason).
+  - *Evidence:* CI runs `forge lint src test --deny warnings`; intentional safe casts are narrowly suppressed with inline justification.
 
-- [ ] 🔵 **warnings_strict** — Project uses maximum strictness in linter config where practical. *(SUGGESTED)*
-  - *Note:* A dedicated strict static-analysis configuration has not yet been added.
+- [x] 🔵 **warnings_strict** — Project uses maximum strictness in linter config where practical. *(SUGGESTED)*
+  - *Evidence:* CI runs `forge lint src test --deny warnings`, causing any Foundry lint warning to fail the build.
 
 ---
 
@@ -213,11 +213,11 @@
 - [x] 🔴 **static_analysis_fixed** — All medium+ severity vulnerabilities found by static analysis are fixed in a timely manner after confirmation.
   - *Note:* Slither analysis was performed and medium/high findings were manually triaged. No confirmed medium-or-higher exploitable vulnerability remains from the scan.
 
-- [ ] 🔵 **static_analysis_common_vulnerabilities** — The static analysis tool includes checks for common vulnerabilities in the language/environment (e.g., eslint-plugin-security, bandit, Slither). *(SUGGESTED)*
-  - *Tool + ruleset:* Slither is not currently integrated into the repository CI.
+- [x] 🔵 **static_analysis_common_vulnerabilities** — The static analysis tool includes checks for common vulnerabilities in the language/environment (e.g., eslint-plugin-security, bandit, Slither). *(SUGGESTED)*
+  - *Tool + ruleset:* Slither 0.11.6 runs its Solidity vulnerability detectors against project contracts, excluding dependency-only findings.
 
-- [ ] 🔵 **static_analysis_often** — Static analysis runs on every commit or at least daily (CI integration). *(SUGGESTED)*
-  - *Evidence URL:* Static analysis is not currently part of the CI workflow.
+- [x] 🔵 **static_analysis_often** — Static analysis runs on every commit or at least daily (CI integration). *(SUGGESTED)*
+  - *Evidence:* The main CI workflow runs Slither on every push and pull request and fails on unsuppressed high-severity findings.
 
 ### Dynamic Code Analysis
 

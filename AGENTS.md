@@ -27,6 +27,10 @@ All oracle prices and protocol fixed-point values are normalized to **18 decimal
 - **Division:** `(valA * 1e18) / valB`
 - **Inversion:** `(1e18 * 1e18) / val`
 
+The dimensionless `pegFactor` uses 36 decimals with `PEG_FACTOR_SCALE = 1e36`.
+Use that scale when applying or inverting the peg factor; oracle prices, fees,
+reserve amounts and peg-adjustment step coefficients still use WAD.
+
 ### 2. Custom Errors
 Always use Solidity custom errors instead of `require` statements with strings. Declare them globally or at the top of contracts:
 
@@ -43,7 +47,7 @@ require(oracle != address(0), "invalid oracle");
 ### 3. State & Constructor Validations
 Move static immutable validations into constructors where appropriate instead of repeatedly checking them inside view or runtime functions.
 
-For Gluon reactors, configuration such as oracle addresses, treasury addresses, fees, reserve-ratio parameters, and required metadata should be validated when the reactor is created.
+For Gluon reactors, configuration such as oracle addresses, dev and dev fee receiver addresses, fees, reserve-ratio parameters, and required metadata should be validated when the reactor is created.
 
 ---
 
