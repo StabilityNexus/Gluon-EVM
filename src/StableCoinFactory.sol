@@ -80,7 +80,6 @@ contract StableCoinFactory {
         if (bytes(protonSymbolParam).length == 0) revert EmptyProtonSymbol();
         if (baseTokenParam == address(0)) revert InvalidBase();
         if (oracleParam == address(0)) revert InvalidOracle();
-        
         if (devParam == address(0)) revert InvalidDev();
         if (devFeeParam >= 1e18) revert InvalidDevFee();
         if (fissionFeeParam >= 1e18 - devFeeParam) revert InvalidFissionFee();

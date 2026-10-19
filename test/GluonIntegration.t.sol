@@ -1827,10 +1827,15 @@ contract GluonIntegrationTest is Test {
             eoaOracle,
             "Gluon Gov",
             "GOV",
-            treasury,
+            dev,
             0,
             0,
-            2e18
+            0,
+            2e18,
+            INITIAL_RESERVE,
+            0,
+            0,
+            1e18
         );
     }
 }
