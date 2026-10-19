@@ -590,4 +590,26 @@ contract GluonIntegrationTest is Test {
     function testAlphaStartsAtWad() public view {
         assertEq(reactor.alpha(), 1e18, "alpha should start at 1");
     }
+
+    function testFactoryChecksUpperRatioBeforeDeployingReactor() public {
+        address eoaOracle = makeAddr("eoaOracle");
+
+        vm.expectRevert(StableCoinFactory.InvalidCriticalReserveRatio.selector);
+
+        factory.deployReactor(
+            "Gluon Vault",
+            "USD Coin",
+            "USDC",
+            "Gluon USD",
+            "GUSD",
+            address(baseToken),
+            eoaOracle,
+            "Gluon Gov",
+            "GOV",
+            treasury,
+            0,
+            0,
+            2e18
+        );
+    }
 }

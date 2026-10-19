@@ -72,7 +72,9 @@ contract StableCoinFactory is Ownable {
         if (treasuryParam == address(0)) revert InvalidTreasury();
         if (fissionFeeParam >= 1e18) revert InvalidFissionFee();
         if (fusionFeeParam >= 1e18) revert InvalidFusionFee();
-        if (criticalReserveRatioWadParam < 1e18) revert InvalidCriticalReserveRatio();
+        if (criticalReserveRatioWadParam < 1e18 || criticalReserveRatioWadParam >= 2e18) {
+            revert InvalidCriticalReserveRatio();
+        }
 
         StableCoinReactor reactor = new StableCoinReactor(
             vaultNameParam,
