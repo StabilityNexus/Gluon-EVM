@@ -6,7 +6,7 @@ import {StableCoinFactory} from "../src/StableCoinFactory.sol";
 
 contract FactoryOwnershipTest is Test {
     function testFactoryHasNoOwnershipInterface() public {
-        StableCoinFactory factory = new StableCoinFactory();
+        StableCoinFactory factory = new StableCoinFactory(address(this), 0);
 
         (bool readsOwner,) = address(factory).staticcall(abi.encodeWithSignature("owner()"));
         (bool transfersOwner,) =

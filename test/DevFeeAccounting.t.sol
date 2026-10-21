@@ -59,7 +59,7 @@ contract DevFeeAccountingTest is Test {
         returns (MockDecimalERC20 base, StableCoinReactor reactor)
     {
         base = new MockDecimalERC20("Base", "B", decimals_);
-        StableCoinFactory factory = new StableCoinFactory();
+        StableCoinFactory factory = new StableCoinFactory(dev, devRate);
         GenericMockOracle oracle = new GenericMockOracle(WAD);
         uint256 seed = 100 * 10 ** uint256(decimals_);
         base.mint(address(this), seed);
@@ -75,8 +75,6 @@ contract DevFeeAccountingTest is Test {
                 address(oracle),
                 "Proton",
                 "P",
-                dev,
-                devRate,
                 fissionFee,
                 fusionFee,
                 12e17,
@@ -308,30 +306,7 @@ contract DevFeeAccountingTest is Test {
     }
 
     function testRejectsDevFeeAtOneHundredPercent() public {
-        MockDecimalERC20 base = new MockDecimalERC20("Base", "B", 18);
-        GenericMockOracle oracle = new GenericMockOracle(WAD);
-        StableCoinFactory factory = new StableCoinFactory();
         vm.expectRevert(StableCoinFactory.InvalidDevFee.selector);
-        factory.deployReactor(
-            "Vault",
-            "Base",
-            "B",
-            "Neutron",
-            "N",
-            address(base),
-            address(oracle),
-            "Proton",
-            "P",
-            dev,
-            WAD,
-            0,
-            0,
-            101e16,
-            15e17,
-            100e18,
-            0,
-            0,
-            WAD
-        );
+        new StableCoinFactory(dev, WAD);
     }
 }

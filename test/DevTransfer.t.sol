@@ -33,19 +33,19 @@ contract DevTransferTest is Test {
     event DevFeeReceiverChanged(address indexed previousReceiver, address indexed newReceiver);
 
     function setUp() public {
-        factory = new StableCoinFactory();
+        factory = new StableCoinFactory(INITIAL_DEV, 1e15);
         base = new GenericMockERC20();
         oracle = new GenericMockOracle(WAD);
-        reactor = _deploy(INITIAL_DEV);
+        reactor = _deploy();
     }
 
-    function _deploy(address initialDev) private returns (StableCoinReactor) {
+    function _deploy() private returns (StableCoinReactor) {
         base.mint(address(this), 100e18);
         base.approve(address(factory), 100e18);
-        return _create(initialDev);
+        return _create();
     }
 
-    function _create(address initialDev) private returns (StableCoinReactor) {
+    function _create() private returns (StableCoinReactor) {
         return StableCoinReactor(
             factory.deployReactor(
                 "Vault",
@@ -57,8 +57,6 @@ contract DevTransferTest is Test {
                 address(oracle),
                 "Proton",
                 "P",
-                initialDev,
-                1e15,
                 FISSION_FEE,
                 FUSION_FEE,
                 101e16,
@@ -92,7 +90,7 @@ contract DevTransferTest is Test {
 
     function testFactoryRejectsZeroDev() public {
         vm.expectRevert(StableCoinFactory.InvalidDev.selector);
-        _create(address(0));
+        new StableCoinFactory(address(0), 1e15);
         assertEq(factory.getDeployedReactorsCount(), 1);
     }
 

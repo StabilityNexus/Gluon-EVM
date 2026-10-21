@@ -13,7 +13,7 @@ contract ReserveRatioConfigurationTest is Test {
     uint256 private constant SEED = 1e36;
 
     function setUp() public {
-        factory = new StableCoinFactory();
+        factory = new StableCoinFactory(address(1), 0);
         base = new GenericMockERC20();
         oracle = new GenericMockOracle(1e18);
         base.mint(address(this), 10 * SEED);
@@ -32,8 +32,6 @@ contract ReserveRatioConfigurationTest is Test {
                 address(oracle),
                 "Proton",
                 "P",
-                address(1),
-                0,
                 fissionFee,
                 0,
                 critical,

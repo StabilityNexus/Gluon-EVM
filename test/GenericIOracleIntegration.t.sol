@@ -61,7 +61,7 @@ contract GenericIOracleIntegrationTest is Test {
     uint256 internal constant INITIAL_RESERVE = 100e18;
 
     function setUp() public {
-        factory = new StableCoinFactory();
+        factory = new StableCoinFactory(dev, 0);
         baseToken = new GenericMockERC20();
     }
 
@@ -178,8 +178,6 @@ contract GenericIOracleIntegrationTest is Test {
             oracleAddress,
             "Gluon Gov",
             "GOV",
-            dev,
-            0,
             0,
             0,
             14e17,

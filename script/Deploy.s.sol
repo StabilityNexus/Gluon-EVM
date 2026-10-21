@@ -19,7 +19,7 @@ contract DeployGluon is Script {
     function run() public {
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
-        factory = new StableCoinFactory();
+        factory = new StableCoinFactory(vm.envAddress("GLUON_DEV"), vm.envUint("GLUON_DEV_FEE_WAD"));
         console.log("Factory Deployed: ", address(factory));
 
         if (chainlinkFeedAddress != address(0)) {

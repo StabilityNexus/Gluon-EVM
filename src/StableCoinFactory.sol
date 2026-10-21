@@ -28,6 +28,9 @@ contract StableCoinFactory {
         uint256 devFee
     );
 
+    address public immutable dev;
+    uint256 public immutable devFee;
+
     address[] public deployedReactors;
     mapping(address => address[]) public reactorsByBase;
 
@@ -47,6 +50,13 @@ contract StableCoinFactory {
     error InvalidCriticalReserveRatio();
     error InvalidInitialReserve();
 
+    constructor(address devParam, uint256 devFeeParam) {
+        if (devParam == address(0)) revert InvalidDev();
+        if (devFeeParam >= 1e18) revert InvalidDevFee();
+        dev = devParam;
+        devFee = devFeeParam;
+    }
+
     /**
      * Deploy a new Reactor
      * @param oracleParam      Address of an IOracle-compatible adapter
@@ -61,8 +71,6 @@ contract StableCoinFactory {
         address oracleParam,
         string memory protonNameParam,
         string memory protonSymbolParam,
-        address devParam,
-        uint256 devFeeParam,
         uint256 fissionFeeParam,
         uint256 fusionFeeParam,
         uint256 criticalReserveRatioWadParam,
@@ -81,10 +89,8 @@ contract StableCoinFactory {
         if (bytes(protonSymbolParam).length == 0) revert EmptyProtonSymbol();
         if (baseTokenParam == address(0)) revert InvalidBase();
         if (oracleParam == address(0)) revert InvalidOracle();
-        if (devParam == address(0)) revert InvalidDev();
-        if (devFeeParam >= 1e18) revert InvalidDevFee();
-        if (fissionFeeParam >= 1e18 - devFeeParam) revert InvalidFissionFee();
-        if (fusionFeeParam >= 1e18 - devFeeParam) revert InvalidFusionFee();
+        if (fissionFeeParam >= 1e18 - devFee) revert InvalidFissionFee();
+        if (fusionFeeParam >= 1e18 - devFee) revert InvalidFusionFee();
         if (criticalReserveRatioWadParam <= 1e18) revert InvalidCriticalReserveRatio();
         if (initialReserveParam == 0) revert InvalidInitialReserve();
 
@@ -98,8 +104,8 @@ contract StableCoinFactory {
             oracleParam, // Pass the adapter address
             protonNameParam,
             protonSymbolParam,
-            devParam,
-            devFeeParam,
+            dev,
+            devFee,
             fissionFeeParam,
             fusionFeeParam,
             criticalReserveRatioWadParam,
@@ -129,7 +135,7 @@ contract StableCoinFactory {
         emit ReactorDeployed(
             reactorAddress,
             baseTokenParam,
-            devParam,
+            dev,
             vaultNameParam,
             baseAssetNameParam,
             baseAssetSymbolParam,
@@ -142,8 +148,8 @@ contract StableCoinFactory {
             fusionFeeParam,
             criticalReserveRatioWadParam,
             initialReserve,
-            devParam,
-            devFeeParam
+            dev,
+            devFee
         );
 
         return reactorAddress;

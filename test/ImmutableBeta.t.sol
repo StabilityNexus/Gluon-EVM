@@ -14,7 +14,7 @@ contract ImmutableBetaTest is Test {
     address internal user = makeAddr("user");
 
     function setUp() public {
-        factory = new StableCoinFactory();
+        factory = new StableCoinFactory(dev, 0);
         baseToken = new GenericMockERC20();
         oracle = new GenericMockOracle(1e18);
     }
@@ -139,8 +139,6 @@ contract ImmutableBetaTest is Test {
                 address(oracle),
                 "Proton",
                 "P",
-                dev,
-                0,
                 0,
                 0,
                 12e17,

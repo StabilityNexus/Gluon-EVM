@@ -13,7 +13,7 @@ contract PegFactorRegressionTest is Test {
     address private dev = makeAddr("peg regression dev");
 
     function setUp() public {
-        factory = new StableCoinFactory();
+        factory = new StableCoinFactory(dev, 0);
         base = new GenericMockERC20();
     }
 
@@ -35,8 +35,6 @@ contract PegFactorRegressionTest is Test {
                 address(oracle),
                 "Proton",
                 "P",
-                dev,
-                0,
                 0,
                 0,
                 14e17,
