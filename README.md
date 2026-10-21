@@ -594,23 +594,49 @@ Burns Neutron and mints the corresponding Proton amount after applying the beta 
 Both transmutations revert with `ExcessiveSlippage` if the minted amount is below
 the caller's minimum, before burning input tokens or paying dev fees. Minimums use
 raw output-token units and apply after both fees. Passing zero opts out of the
-minimum; the existing zero-output check still applies. A zero-price no-op remains
+minimum and allows a rounded-zero output. A zero-price no-op remains
 available with a zero minimum, but reverts when a positive minimum is requested.
 
 ### Protocol and Dev Fees
 
 Fission, fusion and beta fees stay in the reserve. A separate constructor-set
 `devFee` is charged on the same gross amount as the operation's protocol fee.
-Both fees are rounded down independently and deducted from the user's credited
-value or payout; only the dev fee is transferred to `devFeeReceiver`.
+The user's net value or payout is rounded down after both fee rates are applied.
+The dev payment rounds down; the remaining fee and rounding dust stay in the
+reserve. Only the dev payment is transferred to `devFeeReceiver`.
 This follows the separation of `f` and `fT` in
 [Djed's fee calculation](https://github.com/DjedAlliance/Djed-Solidity/blob/d15e0eb55376730a4a5ea60615704b7ff5d9c98a/src/Djed.sol#L162).
 
 Fission and fusion use native reserve-token units. Beta reactions calculate fees
 on their WAD-normalized gross base value; the dev payment is converted down to
 native reserve-token units. Any conversion dust stays in the reserve. Beta-plus
-checks the resulting reserve ratio after the dev payment. If the combined beta
-and dev fees leave no output, the transaction reverts without paying a fee.
+checks the resulting reserve ratio after the dev payment. A combined fee of 100%
+can produce zero output when the minimum is zero. Combined rates above 100%
+revert without paying a fee.
+
+### Rounding
+
+Fission mints proportional claims rounded down. Fusion rounds both required
+burns up, so a positive withdrawal cannot receive reserve without paying for its
+proportional claims. Initial locked allocations round down and must remain
+positive.
+
+Transmutations value burned tokens down and minted tokens up, then round the
+output amount down. Both prices use shared Gluon Z liabilities and equity, following
+[`Gluon.es`](https://github.com/StabilityNexus/Gluon-Ergo-Contracts/blob/d69bee0acf5dda28e1d014c4a0286dd68c185143/contracts/Gluon.es).
+With target Neutron liabilities `T`, reserve `R` and Ergo's fixed `qStar = 0.99`,
+liabilities are `min(T, R * T / (T + 0.01 * R))`; equity is `R - liabilities`.
+The critical reserve ratio remains a separate operating-range setting.
+Liabilities round opposite to equity, so both prices bound their exact values
+in the requested direction. Integer rounding can still produce a zero price.
+Fixed price scales are cancelled before division, and reserve-ratio
+calculations preserve the division remainder before applying the peg factor.
+
+The user's net amount rounds down; dev payments round down and the remaining
+fee and dust stay in reserve. The volume-dependent fee term rounds up before
+its existing cap. Separate counter decay, peg-adjustment step rounding and
+intentional zero-price no-ops are unchanged. Public price views report the lower
+valuation; contract simulation remains authoritative for executable quotes.
 
 For Gluon deployments, pass the initial dev address
 `0x86B8f920835015c0F1b697dBe0B8b150a986eCE5`. The constructor initializes both

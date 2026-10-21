@@ -297,7 +297,7 @@ contract UnsignedVolumeLedgerTest is Test {
 
     function testFeeAtWadVolumeRatioIsCapped() public {
         BetaFeeHarness target = new BetaFeeHarness(address(base), address(oracle), 0, 1);
-        assertEq(target.fee(7, 7 * WAD - 1), WAD - 1);
+        assertEq(target.fee(7, 7 * WAD - 1), WAD);
         assertEq(target.fee(7, 7 * WAD), WAD);
         assertEq(target.fee(7, 7 * WAD + 1), WAD);
         assertEq(target.fee(7, type(uint256).max), WAD);
@@ -320,7 +320,7 @@ contract UnsignedVolumeLedgerTest is Test {
             (uint256 feeHigh, uint256 feeLow) = Math.mul512(phi1, volume);
             (uint256 capHigh, uint256 capLow) = Math.mul512(WAD - phi0, reserveWad);
             bool capped = feeHigh > capHigh || (feeHigh == capHigh && feeLow >= capLow);
-            expected = capped ? WAD : phi0 + Math.mulDiv(phi1, volume, reserveWad);
+            expected = capped ? WAD : phi0 + Math.mulDiv(phi1, volume, reserveWad, Math.Rounding.Ceil);
         }
         assertEq(target.fee(reserveWad, volume), expected);
     }
@@ -333,7 +333,8 @@ contract UnsignedVolumeLedgerTest is Test {
         uint256 phi1 = bound(phi1Raw, 0, WAD);
         BetaFeeHarness target = new BetaFeeHarness(address(base), address(oracle), phi0, phi1);
         // These bounded products fit in uint256, giving an independent direct-arithmetic reference.
-        uint256 expected = phi0 + phi1 * uint256(volume) / reserveWad;
+        uint256 product = phi1 * uint256(volume);
+        uint256 expected = phi0 + product / reserveWad + (product % reserveWad == 0 ? 0 : 1);
         if (expected > WAD) expected = WAD;
         assertEq(target.fee(reserveWad, volume), expected);
     }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {Test} from "forge-std/Test.sol";
 import {StableCoinFactory} from "../src/StableCoinFactory.sol";
 import {StableCoinReactor} from "../src/StableCoin.sol";
@@ -69,6 +70,24 @@ contract PegFactorRegressionTest is Test {
     }
 
     function _redeem(StableCoinReactor reactor, uint256 amount) private {
+        // Mint-down/burn-up can leave a bounded amount of redemption dust.
+        uint256 requested = amount;
+        uint256 maxDust = Math.max(
+            Math.ceilDiv(reactor.reserve(), reactor.NEUTRON_TOKEN().totalSupply()),
+            Math.ceilDiv(reactor.reserve(), reactor.PROTON_TOKEN().totalSupply())
+        );
+        amount = Math.min(
+            amount,
+            Math.mulDiv(
+                reactor.NEUTRON_TOKEN().balanceOf(user), reactor.reserve(), reactor.NEUTRON_TOKEN().totalSupply()
+            )
+        );
+        amount = Math.min(
+            amount,
+            Math.mulDiv(reactor.PROTON_TOKEN().balanceOf(user), reactor.reserve(), reactor.PROTON_TOKEN().totalSupply())
+        );
+        assertGt(amount, 0);
+        assertLe(requested - amount, maxDust, "redemption lost more than rounding dust");
         uint256 beforeBalance = base.balanceOf(user);
         vm.prank(user);
         reactor.fusion(amount, user);

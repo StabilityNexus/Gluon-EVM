@@ -107,7 +107,7 @@ contract DevFeeAccountingTest is Test {
         assertEq(reactor.devFee(), DEV_FEE);
         uint256 credited = 979e17;
         assertEq(reactor.NEUTRON_TOKEN().totalSupply(), Math.mulDiv(credited, WAD, 15e17));
-        assertEq(reactor.PROTON_TOKEN().totalSupply(), credited - Math.mulDiv(credited, WAD, 15e17));
+        assertEq(reactor.PROTON_TOKEN().totalSupply(), credited / 3);
     }
 
     function testFissionAndFusionChargeBothFeesOnGrossAmounts() public {
@@ -116,7 +116,6 @@ contract DevFeeAccountingTest is Test {
         uint256 receiverBefore = base.balanceOf(receiver);
         uint256 nSupply = reactor.NEUTRON_TOKEN().totalSupply();
         uint256 pSupply = reactor.PROTON_TOKEN().totalSupply();
-        uint256 ratioBefore = reactor.reserveRatioPeggedAsset();
         base.mint(user, 20e18);
         vm.startPrank(user);
         base.approve(address(reactor), 20e18);
@@ -125,7 +124,7 @@ contract DevFeeAccountingTest is Test {
             user,
             user,
             20e18,
-            Math.mulDiv(1958e16, WAD, ratioBefore),
+            Math.mulDiv(1958e16, nSupply, reserveBefore),
             Math.mulDiv(1958e16, pSupply, reserveBefore),
             4e17,
             2e16
@@ -134,7 +133,7 @@ contract DevFeeAccountingTest is Test {
         vm.stopPrank();
         assertEq(reactor.reserve(), reserveBefore + 20e18 - 2e16);
         assertEq(base.balanceOf(receiver), receiverBefore + 2e16);
-        assertEq(reactor.NEUTRON_TOKEN().balanceOf(user), Math.mulDiv(1958e16, WAD, ratioBefore));
+        assertEq(reactor.NEUTRON_TOKEN().balanceOf(user), Math.mulDiv(1958e16, nSupply, reserveBefore));
         assertEq(reactor.PROTON_TOKEN().balanceOf(user), Math.mulDiv(1958e16, pSupply, reserveBefore));
         reserveBefore = reactor.reserve();
         nSupply = reactor.NEUTRON_TOKEN().totalSupply();
@@ -146,8 +145,8 @@ contract DevFeeAccountingTest is Test {
         emit Fusion(
             user,
             user,
-            Math.mulDiv(10e18, nSupply, reserveBefore),
-            Math.mulDiv(10e18, pSupply, reserveBefore),
+            Math.mulDiv(10e18, nSupply, reserveBefore, Math.Rounding.Ceil),
+            Math.mulDiv(10e18, pSupply, reserveBefore, Math.Rounding.Ceil),
             969e16,
             3e17,
             1e16
@@ -157,8 +156,14 @@ contract DevFeeAccountingTest is Test {
         assertEq(base.balanceOf(user), 969e16);
         assertEq(base.balanceOf(receiver), receiverBefore + 1e16);
         assertEq(reactor.reserve(), reserveBefore - 97e17);
-        assertEq(nBefore - reactor.NEUTRON_TOKEN().balanceOf(user), Math.mulDiv(10e18, nSupply, reserveBefore));
-        assertEq(pBefore - reactor.PROTON_TOKEN().balanceOf(user), Math.mulDiv(10e18, pSupply, reserveBefore));
+        assertEq(
+            nBefore - reactor.NEUTRON_TOKEN().balanceOf(user),
+            Math.mulDiv(10e18, nSupply, reserveBefore, Math.Rounding.Ceil)
+        );
+        assertEq(
+            pBefore - reactor.PROTON_TOKEN().balanceOf(user),
+            Math.mulDiv(10e18, pSupply, reserveBefore, Math.Rounding.Ceil)
+        );
     }
 
     function testBothBetaDirectionsRetainProtocolFeeAndPaySeparateDevFee() public {
@@ -169,7 +174,7 @@ contract DevFeeAccountingTest is Test {
         uint256 protonIn = 1e18;
         uint256 gross = Math.mulDiv(protonIn, reactor.protonPriceInBase(), WAD);
         uint256 expectedDevFee = Math.mulDiv(gross, DEV_FEE, WAD);
-        uint256 expectedNet = gross - Math.mulDiv(gross, 1e16, WAD) - expectedDevFee;
+        uint256 expectedNet = Math.mulDiv(gross, WAD - 1e16 - DEV_FEE, WAD);
         uint256 expectedOut = Math.mulDiv(expectedNet, WAD, reactor.neutronPriceInBase());
         uint256 nBefore = reactor.NEUTRON_TOKEN().balanceOf(user);
         vm.expectEmit(true, true, false, true, address(reactor));
@@ -186,8 +191,14 @@ contract DevFeeAccountingTest is Test {
         uint256 plusVolume = gross;
         gross = reactor.neutronPriceInBase();
         expectedDevFee = Math.mulDiv(gross, DEV_FEE, WAD);
-        expectedNet = gross - Math.mulDiv(gross, 1e16, WAD) - expectedDevFee;
-        expectedOut = Math.mulDiv(expectedNet, WAD, reactor.protonPriceInBase());
+        expectedNet = Math.mulDiv(gross, WAD - 1e16 - DEV_FEE, WAD);
+        uint256 protonBuyPrice = Math.mulDiv(
+            reserveBefore - reactor.NEUTRON_TOKEN().totalSupply(),
+            WAD,
+            reactor.PROTON_TOKEN().totalSupply(),
+            Math.Rounding.Ceil
+        );
+        expectedOut = Math.mulDiv(expectedNet, WAD, protonBuyPrice);
         vm.expectEmit(true, true, false, true, address(reactor));
         emit TransmuteMinus(user, user, WAD, expectedOut, 1e16, plusVolume, gross, expectedDevFee);
         vm.prank(user);
@@ -229,9 +240,8 @@ contract DevFeeAccountingTest is Test {
         uint256 expectedDevNative = Math.mulDiv(Math.mulDiv(gross, DEV_FEE, WAD), 1e6, WAD);
         uint256 r = reactor.reserve();
         uint256 before = base.balanceOf(receiver);
-        uint256 devWad = Math.mulDiv(gross, DEV_FEE, WAD);
         uint256 expectedOut =
-            Math.mulDiv(gross - Math.mulDiv(gross, 1e16, WAD) - devWad, WAD, reactor.neutronPriceInBase());
+            Math.mulDiv(Math.mulDiv(gross, WAD - 1e16 - DEV_FEE, WAD), WAD, reactor.neutronPriceInBase());
         vm.expectEmit(true, true, false, true, address(reactor));
         emit TransmutePlus(user, user, 1e18, expectedOut, 1e16, gross, 0, expectedDevNative);
         vm.prank(user);
@@ -248,7 +258,13 @@ contract DevFeeAccountingTest is Test {
         uint256 gross = reactor.neutronPriceInBase();
         assertGt(Math.mulDiv(gross, DEV_FEE, WAD), 0);
         assertEq(Math.mulDiv(Math.mulDiv(gross, DEV_FEE, WAD), 1, WAD), 0);
-        uint256 expectedOut = Math.mulDiv(gross - Math.mulDiv(gross, DEV_FEE, WAD), WAD, reactor.protonPriceInBase());
+        uint256 protonBuyPrice = Math.mulDiv(
+            r * WAD - reactor.NEUTRON_TOKEN().totalSupply(),
+            WAD,
+            reactor.PROTON_TOKEN().totalSupply(),
+            Math.Rounding.Ceil
+        );
+        uint256 expectedOut = Math.mulDiv(Math.mulDiv(gross, WAD - DEV_FEE, WAD), WAD, protonBuyPrice);
         vm.recordLogs();
         vm.expectEmit(true, true, false, true, address(reactor));
         emit TransmuteMinus(user, user, WAD, expectedOut, 0, 0, gross, 0);
@@ -275,19 +291,18 @@ contract DevFeeAccountingTest is Test {
         assertEq(base.balanceOf(user), 0);
     }
 
-    function testOneUnitDepositRevertsWithoutStateChange() public {
+    function testOneUnitDepositRetainsRoundingRemainder() public {
         (MockDecimalERC20 base, StableCoinReactor reactor) = _deploy(18, 2e16, 3e16, 0, DEV_FEE);
         uint256 r = reactor.reserve();
         uint256 d = base.balanceOf(receiver);
         base.mint(user, 1);
         vm.startPrank(user);
         base.approve(address(reactor), 1);
-        vm.expectRevert(StableCoinReactor.AmountTooSmall.selector);
         reactor.fission(1, user);
         vm.stopPrank();
-        assertEq(base.balanceOf(user), 1);
+        assertEq(base.balanceOf(user), 0);
         assertEq(base.balanceOf(receiver), d);
-        assertEq(reactor.reserve(), r);
+        assertEq(reactor.reserve(), r + 1);
         assertEq(reactor.NEUTRON_TOKEN().balanceOf(user), 0);
         assertEq(reactor.PROTON_TOKEN().balanceOf(user), 0);
     }
