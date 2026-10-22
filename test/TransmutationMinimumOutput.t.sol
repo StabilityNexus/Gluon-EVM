@@ -43,7 +43,8 @@ contract TransmutationMinimumOutputTest is Test {
                 1e15,
                 0,
                 0,
-                WAD,
+                101e16,
+                15e17,
                 deposit,
                 0,
                 WAD,
@@ -150,10 +151,11 @@ contract TransmutationMinimumOutputTest is Test {
     }
 
     function testPositiveMinimumRejectsZeroTranchePriceAndZeroMinimumPreservesNoOp() public {
-        uint256 excess = reactor.reserve() - reactor.NEUTRON_TOKEN().totalSupply();
-        vm.prank(address(reactor));
-        assertTrue(base.transfer(other, excess));
-        assertEq(reactor.reserveRatioPeggedAsset(), WAD);
+        // Keep the ratio in range while Proton's price rounds to zero.
+        vm.mockCall(
+            address(reactor.PROTON_TOKEN()), abi.encodeWithSignature("totalSupply()"), abi.encode(type(uint256).max)
+        );
+        assertGt(reactor.reserveRatioPeggedAsset(), reactor.CRITICAL_RESERVE_RATIO());
         assertEq(reactor.protonPriceInBase(), 0);
         bytes32 beforeBalances = _balances();
         for (uint256 i; i < 2; ++i) {

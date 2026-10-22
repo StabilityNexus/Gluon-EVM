@@ -17,7 +17,6 @@ contract StableCoinReactor is ReentrancyGuard {
     uint256 public constant WAD = 1e18;
     uint256 public constant PEGGED_ASSET_WAD = 1e18; // peg target
     uint256 public constant UPPER_RESERVE_RATIO = 2e18;
-    uint256 internal constant INITIAL_RESERVE_RATIO = 15e17;
     // Prices and step coefficients remain WAD; the dimensionless peg factor has 36 decimals.
     uint256 public constant PEG_FACTOR_SCALE = 1e36;
     uint256 public constant PEG_DOWN_FACTOR_WAD = 99e16;
@@ -35,6 +34,7 @@ contract StableCoinReactor is ReentrancyGuard {
     error InvalidFissionFee();
     error InvalidFusionFee();
     error InvalidCriticalReserveRatio();
+    error InvalidInitialReserveRatio();
     error EmptyVaultName();
     error EmptyBaseName();
     error EmptyBaseSymbol();
@@ -177,7 +177,7 @@ contract StableCoinReactor is ReentrancyGuard {
         if (fusionFeeParam >= WAD - devFeeParam) revert InvalidFusionFee();
         if (betaPhi0Param > WAD || betaPhi1Param > WAD) revert InvalidPhi();
         if (decayPerSecondWadParam > WAD) revert InvalidDecay();
-        if (criticalReserveRatioWadParam < WAD || criticalReserveRatioWadParam >= UPPER_RESERVE_RATIO) {
+        if (criticalReserveRatioWadParam <= WAD || criticalReserveRatioWadParam >= UPPER_RESERVE_RATIO) {
             revert InvalidCriticalReserveRatio();
         }
         if (bytes(vaultNameParam).length == 0) revert EmptyVaultName();
@@ -253,19 +253,22 @@ contract StableCoinReactor is ReentrancyGuard {
         return _baseToWad(reserve());
     }
 
-    function initialFission(uint256 amountIn) external nonReentrant {
+    function initialFission(uint256 amountIn, uint256 initialReserveRatioWad) external nonReentrant {
         if (msg.sender != FACTORY) revert OnlyFactory();
         if (NEUTRON_TOKEN.totalSupply() != 0 || PROTON_TOKEN.totalSupply() != 0) revert AlreadyInitialized();
         if (amountIn == 0) revert InvalidInitialReserve();
+        if (initialReserveRatioWad <= CRITICAL_RESERVE_RATIO || initialReserveRatioWad >= UPPER_RESERVE_RATIO) {
+            revert InvalidInitialReserveRatio();
+        }
 
         uint256 basePrice = _readAndCacheBasePrice();
         (uint256 neutronOut, uint256 protonOut) =
-            fissionAux(amountIn, address(this), INITIAL_RESERVE_RATIO, 0, basePrice);
+            fissionAux(amountIn, address(this), initialReserveRatioWad, 0, basePrice);
 
         if (neutronOut == 0 || protonOut == 0) revert InvalidInitialReserve();
 
         uint256 initialReserveRatio = _reserveRatioWad(_normalizedReserve(), neutronOut, basePrice);
-        if (initialReserveRatio < CRITICAL_RESERVE_RATIO || initialReserveRatio > UPPER_RESERVE_RATIO) {
+        if (initialReserveRatio <= CRITICAL_RESERVE_RATIO || initialReserveRatio >= UPPER_RESERVE_RATIO) {
             revert InvalidInitialReserve();
         }
     }

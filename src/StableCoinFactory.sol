@@ -66,6 +66,7 @@ contract StableCoinFactory {
         uint256 fissionFeeParam,
         uint256 fusionFeeParam,
         uint256 criticalReserveRatioWadParam,
+        uint256 initialReserveRatioWadParam,
         uint256 initialReserveParam,
         uint256 betaPhi0Param,
         uint256 betaPhi1Param,
@@ -84,9 +85,8 @@ contract StableCoinFactory {
         if (devFeeParam >= 1e18) revert InvalidDevFee();
         if (fissionFeeParam >= 1e18 - devFeeParam) revert InvalidFissionFee();
         if (fusionFeeParam >= 1e18 - devFeeParam) revert InvalidFusionFee();
-        if (criticalReserveRatioWadParam < 1e18 || criticalReserveRatioWadParam >= 2e18) {
-            revert InvalidCriticalReserveRatio();
-        }
+        
+        if (criticalReserveRatioWadParam <= 1e18 || criticalReserveRatioWadParam >= 2e18) revert InvalidCriticalReserveRatio();
         if (initialReserveParam == 0) revert InvalidInitialReserve();
 
         StableCoinReactor reactor = new StableCoinReactor(
@@ -120,7 +120,7 @@ contract StableCoinFactory {
         if (amountIn == 0) revert InvalidInitialReserve();
 
         baseToken.forceApprove(reactorAddress, amountIn);
-        reactor.initialFission(amountIn);
+        reactor.initialFission(amountIn, initialReserveRatioWadParam);
 
         uint256 initialReserve = reactor.reserve();
 

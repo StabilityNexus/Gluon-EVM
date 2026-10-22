@@ -144,6 +144,7 @@ contract ImmutableBetaTest is Test {
                 0,
                 0,
                 12e17,
+                15e17,
                 100e18,
                 phi0,
                 phi1,

@@ -61,7 +61,8 @@ contract DevTransferTest is Test {
                 1e15,
                 FISSION_FEE,
                 FUSION_FEE,
-                WAD,
+                101e16,
+                15e17,
                 100e18,
                 1e16,
                 5e17,
@@ -111,7 +112,7 @@ contract DevTransferTest is Test {
             1e15,
             FISSION_FEE,
             FUSION_FEE,
-            WAD,
+            101e16,
             0,
             0,
             WAD

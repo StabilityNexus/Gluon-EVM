@@ -188,10 +188,9 @@ contract OrbOracleIntegrationTest is Test {
     }
 
     function testTransmutationUsesCachedPriceWhenOrbBlacklistsReactor() public {
-        // A lower critical ratio leaves headroom for beta+, which mints Neutron and therefore
-        // lowers the reserve ratio. At the seeded 1.5e18 it would otherwise revert on the
-        // critical-ratio check before the oracle fallback could be exercised.
-        reactor = _deployReactorWithCriticalRatio(1e18);
+        // Use a low critical ratio so beta+ can mint Neutron while testing
+        // the cached oracle price.
+        reactor = _deployReactorWithCriticalRatio(101e16);
 
         address user = makeAddr("transmuteUser");
         uint256 fissionAmount = 100e18;
@@ -313,6 +312,7 @@ contract OrbOracleIntegrationTest is Test {
             0,
             0,
             criticalReserveRatio,
+            15e17,
             INITIAL_RESERVE,
             0,
             0,
@@ -323,6 +323,6 @@ contract OrbOracleIntegrationTest is Test {
     }
 
     function _deployReactor() internal returns (StableCoinReactor) {
-        return _deployReactorWithCriticalRatio(15e17);
+        return _deployReactorWithCriticalRatio(14e17);
     }
 }

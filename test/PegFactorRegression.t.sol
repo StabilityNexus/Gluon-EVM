@@ -39,6 +39,7 @@ contract PegFactorRegressionTest is Test {
                 0,
                 0,
                 0,
+                14e17,
                 15e17,
                 100e18,
                 0,
