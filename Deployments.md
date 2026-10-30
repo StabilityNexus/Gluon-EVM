@@ -1,6 +1,48 @@
 # Gluon-EVM Deployments
 
-This document records beta and test deployments of Gluon-EVM.
+This document records current Gluon-EVM Factory deployments and earlier beta/test deployments.
+
+## Current StableCoinFactory Deployments (October 2026)
+
+The following Factory-only deployments use Gluon-EVM source commit
+`d39081c3112fba0c22a1bb5dfc1ebb6a8f1d6f10`.
+
+Common configuration:
+
+- **Deployer:** `0x4924D0C5C26F8031df7713dEb6bb351B9Df03CDE`
+- **Developer:** `0x86B8f920835015c0F1b697dBe0B8b150a986eCE5`
+- **Developer fee:** `1000000000000000` WAD (0.1%)
+- **Deployment:** `StableCoinFactory` only; no Reactor or oracle adapter
+- **Initial registered Reactor count:** `0`
+
+| Network | Chain ID | Factory address | Deployment transaction |
+|---|---|---|---|
+| Ethereum Mainnet | `1` | `0xcA68B9d5C0285CCf9f5Be2D60d525F292E76322a` | [Etherscan](https://etherscan.io/tx/0x80437034864480b15e768ceb391a93dadbd06c2722435646747b9574c16e2960) |
+| Polygon Mainnet | `137` | `0xcA68B9d5C0285CCf9f5Be2D60d525F292E76322a` | [Polygonscan](https://polygonscan.com/tx/0xb328ca86884dd7ffcdabd79d7b9c9763aa61b9b782766f9410fb612852abe8f9) |
+| Base Mainnet | `8453` | `0xcA68B9d5C0285CCf9f5Be2D60d525F292E76322a` | [Basescan](https://basescan.org/tx/0x9eb3050c1231d8b5f18d44793c02f2ee250a5e26c713c31d08593b4669d73833) |
+| Ethereum Sepolia | `11155111` | `0x7e04a17f09EACa400c9CFca690C5a1859FE7DCD5` | [Sepolia Etherscan](https://sepolia.etherscan.io/tx/0xd5a1f6a65d59bd56a57d51aea1d5cbefb7ffe537529408688d5c8c3c9d935f88) |
+| BNB Smart Chain | `56` | `0xcA68B9d5C0285CCf9f5Be2D60d525F292E76322a` | [BscScan](https://bscscan.com/tx/0x1e798cd5160c59dd622232681fd487b1c09782245dfe8e009ed3ed4af382aea1) |
+| Ethereum Classic | `61` | `0xcA68B9d5C0285CCf9f5Be2D60d525F292E76322a` | [ETC Blockscout](https://etc.blockscout.com/tx/0x0ecd3a5490aaeb0e1db8a307ec4ab41a6a2f7be756acfce1417d89f5e4a82c40) |
+
+### Build and Verification Notes
+
+- Ethereum, Polygon, Base, BSC and the current Sepolia Factory use
+  the Osaka-targeted Solidity 0.8.30 build. The deployed runtime is
+  24,418 bytes.
+- Ethereum Classic uses Solidity 0.8.30 compiled for Shanghai,
+  with via-IR and 200 optimizer runs, to match ETC's EVM execution
+  requirements. Its deployed runtime is 24,560 bytes.
+- ETC therefore has different bytecode despite using the same
+  Solidity source and Factory constructor configuration.
+- Factory deployment receipts and configuration were checked on-chain.
+  Solidity source verification was completed on the respective explorers.
+- These Factory-only deployments do not establish that Reactor creation,
+  fission, fusion or other protocol interactions have been tested on
+  every network.
+- The current Sepolia Factory is separate from the earlier Sepolia
+  Orb and Chainlink deployments documented below.
+
+---
 
 ## Current Ethereum Sepolia Orb + Chainlink Deployment
 
