@@ -3,6 +3,7 @@
 pragma solidity ^0.8.20;
 
 import {StableCoinReactor} from "./StableCoin.sol";
+import {ProtocolConstants} from "./config/ProtocolConstants.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -53,7 +54,7 @@ contract StableCoinFactory {
 
     constructor(address devParam, uint256 devFeeParam) {
         if (devParam == address(0)) revert InvalidDev();
-        if (devFeeParam >= 1e18) revert InvalidDevFee();
+        if (devFeeParam >= ProtocolConstants.WAD) revert InvalidDevFee();
         dev = devParam;
         devFee = devFeeParam;
     }
@@ -90,9 +91,9 @@ contract StableCoinFactory {
         if (bytes(protonSymbolParam).length == 0) revert EmptyProtonSymbol();
         if (baseTokenParam == address(0)) revert InvalidBase();
         if (oracleParam == address(0)) revert InvalidOracle();
-        if (fissionFeeParam >= 1e18 - devFee) revert InvalidFissionFee();
-        if (fusionFeeParam >= 1e18 - devFee) revert InvalidFusionFee();
-        if (criticalReserveRatioWadParam <= 1e18) revert InvalidCriticalReserveRatio();
+        if (fissionFeeParam >= ProtocolConstants.WAD - devFee) revert InvalidFissionFee();
+        if (fusionFeeParam >= ProtocolConstants.WAD - devFee) revert InvalidFusionFee();
+        if (criticalReserveRatioWadParam <= ProtocolConstants.WAD) revert InvalidCriticalReserveRatio();
         if (initialReserveParam == 0) revert InvalidInitialReserve();
 
         StableCoinReactor reactor = new StableCoinReactor(
