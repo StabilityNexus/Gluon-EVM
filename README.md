@@ -15,6 +15,8 @@
 Developed under [**Stability Nexus**](https://github.com/StabilityNexus)
 
 [![CI](https://github.com/StabilityNexus/Gluon-EVM/actions/workflows/test.yml/badge.svg)](https://github.com/StabilityNexus/Gluon-EVM/actions/workflows/test.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/StabilityNexus/Gluon-EVM/badge)](https://scorecard.dev/viewer/?uri=github.com/StabilityNexus/Gluon-EVM)
+[![Best Practices](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FStabilityNexus%2FGluon-EVM%2Fmain%2Fchecklist-status.json)](BestPracticesChecklist.md)
 [![Solidity](https://img.shields.io/badge/Solidity-%5E0.8.20-363636?logo=solidity)](https://soliditylang.org/)
 [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-FFB000)](https://getfoundry.sh/)
 
