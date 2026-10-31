@@ -3,6 +3,7 @@
 pragma solidity ^0.8.20;
 
 import {IOracle} from "../interfaces/IOracle.sol";
+import {ProtocolConstants} from "../config/ProtocolConstants.sol";
 
 // minimal chainlink interface, only what we need
 interface AggregatorV3Interface {
@@ -53,12 +54,12 @@ contract ChainlinkToOracleAdapter is IOracle {
 
     // scale native decimals to WAD (1e18)
     function _scaleToWad(uint256 value, uint8 valueDecimals) internal pure returns (uint256) {
-        if (valueDecimals == 18) {
+        if (valueDecimals == ProtocolConstants.ORACLE_PRICE_DECIMALS) {
             return value;
         }
-        if (valueDecimals < 18) {
-            return value * (10 ** (18 - uint256(valueDecimals)));
+        if (valueDecimals < ProtocolConstants.ORACLE_PRICE_DECIMALS) {
+            return value * (10 ** (ProtocolConstants.ORACLE_PRICE_DECIMALS - uint256(valueDecimals)));
         }
-        return value / (10 ** (uint256(valueDecimals) - 18));
+        return value / (10 ** (uint256(valueDecimals) - ProtocolConstants.ORACLE_PRICE_DECIMALS));
     }
 }

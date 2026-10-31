@@ -3,6 +3,7 @@
 pragma solidity ^0.8.20;
 
 import {Tokeon} from "./tokens/Tokeon.sol";
+import {ProtocolConstants} from "./config/ProtocolConstants.sol";
 
 import {IOracle} from "./interfaces/IOracle.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -15,14 +16,13 @@ contract StableCoinReactor is ReentrancyGuard {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
-    uint256 public constant WAD = 1e18;
-    uint256 internal constant Q_STAR_WAD = 99e16;
-    uint256 public constant PEGGED_ASSET_WAD = 1e18; // peg target
-    uint256 public constant UPPER_RESERVE_RATIO = 2e18;
-    // Prices and step coefficients remain WAD; the dimensionless peg factor has 36 decimals.
-    uint256 public constant PEG_FACTOR_SCALE = 1e36;
-    uint256 public constant PEG_DOWN_FACTOR_WAD = 99e16;
-    uint256 public constant PEG_UP_FACTOR_WAD = 101e16;
+    uint256 public constant WAD = ProtocolConstants.WAD;
+    uint256 internal constant Q_STAR_WAD = ProtocolConstants.Q_STAR_WAD;
+    uint256 public constant PEGGED_ASSET_WAD = ProtocolConstants.PEGGED_ASSET_WAD;
+    uint256 public constant UPPER_RESERVE_RATIO = ProtocolConstants.UPPER_RESERVE_RATIO;
+    uint256 public constant PEG_FACTOR_SCALE = ProtocolConstants.PEG_FACTOR_SCALE;
+    uint256 public constant PEG_DOWN_FACTOR_WAD = ProtocolConstants.PEG_DOWN_FACTOR_WAD;
+    uint256 public constant PEG_UP_FACTOR_WAD = ProtocolConstants.PEG_UP_FACTOR_WAD;
 
     error InvalidBaseToken();
     error InvalidBaseTokenDecimals(uint8 decimals);
@@ -167,7 +167,7 @@ contract StableCoinReactor is ReentrancyGuard {
             revert InvalidBaseToken();
         }
 
-        if (baseTokenDecimals > 18) revert InvalidBaseTokenDecimals(baseTokenDecimals);
+        if (baseTokenDecimals > ProtocolConstants.WAD_DECIMALS) revert InvalidBaseTokenDecimals(baseTokenDecimals);
         BASE_TOKEN_UNIT = 10 ** uint256(baseTokenDecimals);
 
         if (oracleParam == address(0)) revert InvalidOracle();
