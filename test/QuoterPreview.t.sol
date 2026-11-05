@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {StableCoinFactory} from "../src/StableCoinFactory.sol";
 import {StableCoinReactor} from "../src/StableCoin.sol";
 import {GenericMockOracle} from "./GenericIOracleIntegration.t.sol";
-import {MockDecimalERC20} from "./GluonIntegration.t.sol";
+import {MockDecimalERC20, MockFeeERC20} from "./GluonIntegration.t.sol";
 
 contract QuoterPreviewTest is Test {
     uint256 private constant WAD = 1e18;
@@ -15,6 +15,7 @@ contract QuoterPreviewTest is Test {
 
     MockDecimalERC20 private base;
     GenericMockOracle private oracle;
+    StableCoinFactory private factory;
     StableCoinReactor private reactor;
 
     function setUp() public {
@@ -24,7 +25,7 @@ contract QuoterPreviewTest is Test {
     function _deploy(uint8 decimals) private {
         base = new MockDecimalERC20("Base", "B", decimals);
         oracle = new GenericMockOracle(WAD);
-        StableCoinFactory factory = new StableCoinFactory(dev, 1e15); // 0.1% dev fee
+        factory = new StableCoinFactory(dev, 1e15); // 0.1% dev fee
         uint256 initialDeposit = 100 * 10 ** uint256(decimals);
         base.mint(address(this), initialDeposit);
         base.approve(address(factory), initialDeposit);
@@ -65,12 +66,6 @@ contract QuoterPreviewTest is Test {
         base.mint(user, deposit);
 
         (uint256 qNeutron, uint256 qProton, uint256 qFee, uint256 qDev) = reactor.quoteFission(deposit);
-        (uint256 pNeutron, uint256 pProton, uint256 pFee, uint256 pDev) = reactor.previewFission(deposit);
-
-        assertEq(qNeutron, pNeutron);
-        assertEq(qProton, pProton);
-        assertEq(qFee, pFee);
-        assertEq(qDev, pDev);
 
         uint256 userNeutronBefore = reactor.NEUTRON_TOKEN().balanceOf(recipient);
         uint256 userProtonBefore = reactor.PROTON_TOKEN().balanceOf(recipient);
@@ -95,14 +90,6 @@ contract QuoterPreviewTest is Test {
 
         (uint256 qNeutronBurn, uint256 qProtonBurn, uint256 qNetOut, uint256 qFee, uint256 qDev) =
             reactor.quoteFusion(grossWithdrawal);
-        (uint256 pNeutronBurn, uint256 pProtonBurn, uint256 pNetOut, uint256 pFee, uint256 pDev) =
-            reactor.previewFusion(grossWithdrawal);
-
-        assertEq(qNeutronBurn, pNeutronBurn);
-        assertEq(qProtonBurn, pProtonBurn);
-        assertEq(qNetOut, pNetOut);
-        assertEq(qFee, pFee);
-        assertEq(qDev, pDev);
 
         uint256 userBaseBefore = base.balanceOf(recipient);
         uint256 userNeutronBefore = reactor.NEUTRON_TOKEN().balanceOf(user);
@@ -128,13 +115,7 @@ contract QuoterPreviewTest is Test {
 
         (uint256 qNeutronOut, uint256 qFeeWad, uint256 qProtoFee, uint256 qDevFee) =
             reactor.quoteTransmuteProtonToNeutron(protonIn);
-        (uint256 pNeutronOut, uint256 pFeeWad, uint256 pProtoFee, uint256 pDevFee) =
-            reactor.previewTransmuteProtonToNeutron(protonIn);
 
-        assertEq(qNeutronOut, pNeutronOut);
-        assertEq(qFeeWad, pFeeWad);
-        assertEq(qProtoFee, pProtoFee);
-        assertEq(qDevFee, pDevFee);
         assertGt(qNeutronOut, 0);
 
         uint256 recipientNeutronBefore = reactor.NEUTRON_TOKEN().balanceOf(recipient);
@@ -156,13 +137,7 @@ contract QuoterPreviewTest is Test {
 
         (uint256 qProtonOut, uint256 qFeeWad, uint256 qProtoFee, uint256 qDevFee) =
             reactor.quoteTransmuteNeutronToProton(neutronIn);
-        (uint256 pProtonOut, uint256 pFeeWad, uint256 pProtoFee, uint256 pDevFee) =
-            reactor.previewTransmuteNeutronToProton(neutronIn);
 
-        assertEq(qProtonOut, pProtonOut);
-        assertEq(qFeeWad, pFeeWad);
-        assertEq(qProtoFee, pProtoFee);
-        assertEq(qDevFee, pDevFee);
         assertGt(qProtonOut, 0);
 
         uint256 recipientProtonBefore = reactor.PROTON_TOKEN().balanceOf(recipient);
@@ -254,5 +229,129 @@ contract QuoterPreviewTest is Test {
         (uint256 decayedPlus, uint256 decayedMinus) = reactor.decayedVolumes();
         assertLt(decayedPlus, plusAfter);
         assertEq(decayedMinus, 0);
+    }
+
+    function testFissionQuoteWhenReceivedAmountDiffersFromInput() public {
+        MockFeeERC20 feeToken = new MockFeeERC20("Fee Base", "FB");
+        uint256 requestedInitial = 100e18;
+        feeToken.mint(address(this), requestedInitial);
+        feeToken.approve(address(factory), requestedInitial);
+
+        StableCoinReactor feeReactor = StableCoinReactor(
+            factory.deployReactor(
+                "FeeVault",
+                "Fee Base",
+                "FB",
+                "Fee Neutron",
+                "FNT",
+                address(feeToken),
+                address(oracle),
+                "Fee Proton",
+                "FPT",
+                1e16, // 1% fission fee
+                1e16, // 1% fusion fee
+                101e16,
+                15e17,
+                requestedInitial,
+                5e15,
+                1e16,
+                99e16
+            )
+        );
+
+        address testUser = makeAddr("feeUser");
+        uint256 inputAmount = 50e18;
+        feeToken.mint(testUser, inputAmount);
+
+        // MockFeeERC20 charges a 10% transfer tax on transfers between non-zero addresses.
+        // Therefore, when depositing 50e18, the reactor receives exactly 45e18.
+        uint256 receivedAmount = 45e18;
+
+        // Quoting with the actual received amount accurately predicts the execution results
+        (uint256 qNeutron, uint256 qProton, uint256 qFee, uint256 qDev) = feeReactor.quoteFission(receivedAmount);
+
+        // Quoting with the raw inputAmount would overestimate outputs because the token has a transfer tax
+        (uint256 naiveNeutron, uint256 naiveProton,,) = feeReactor.quoteFission(inputAmount);
+        assertGt(naiveNeutron, qNeutron);
+        assertGt(naiveProton, qProton);
+
+        // Execute fission with inputAmount
+        uint256 devBalBefore = feeToken.balanceOf(dev);
+        vm.startPrank(testUser);
+        feeToken.approve(address(feeReactor), inputAmount);
+        feeReactor.fission(inputAmount, recipient);
+        vm.stopPrank();
+
+        // Execution output matches quoteFission(receivedAmount) with 0 discrepancy
+        assertEq(feeReactor.NEUTRON_TOKEN().balanceOf(recipient), qNeutron, "Fee token fission neutron mismatch");
+        assertEq(feeReactor.PROTON_TOKEN().balanceOf(recipient), qProton, "Fee token fission proton mismatch");
+        // qDev is the fee amount transferred by the reactor; MockFeeERC20 burns 10% on transfer
+        assertEq(feeToken.balanceOf(dev) - devBalBefore, qDev - (qDev / 10), "Fee token dev fee mismatch");
+    }
+
+    function testBetaPlusCalculationsAccountForDevFeeTransfer() public {
+        address devReceiver = makeAddr("highDevReceiver");
+        StableCoinFactory highDevFactory = new StableCoinFactory(devReceiver, 1e17); // 10% dev fee
+        MockDecimalERC20 testBase = new MockDecimalERC20("TBase", "TB", 18);
+        uint256 initDeposit = 100e18;
+        testBase.mint(address(this), initDeposit);
+        testBase.approve(address(highDevFactory), initDeposit);
+
+        StableCoinReactor highDevReactor = StableCoinReactor(
+            highDevFactory.deployReactor(
+                "HighDevVault",
+                "TBase",
+                "TB",
+                "TNeutron",
+                "TN",
+                address(testBase),
+                address(oracle),
+                "TProton",
+                "TP",
+                0,
+                0,
+                121e16, // critical reserve ratio: 1.21
+                150e16, // initial reserve ratio: 1.50
+                initDeposit,
+                0,
+                0,
+                WAD
+            )
+        );
+
+        address trader = makeAddr("trader");
+        uint256 traderDeposit = 100e18;
+        testBase.mint(trader, traderDeposit);
+        vm.startPrank(trader);
+        testBase.approve(address(highDevReactor), traderDeposit);
+        highDevReactor.fission(traderDeposit, trader);
+        vm.stopPrank();
+
+        uint256 protonBalance = highDevReactor.PROTON_TOKEN().balanceOf(trader);
+
+        // Verify that quoting matches execution when dev fee is transferred out
+        uint256 tradeAmount = 10e18;
+        (uint256 quotedNeutron, uint256 quotedFeeWad, uint256 quotedProtoFee, uint256 quotedDevFee) =
+            highDevReactor.quoteTransmuteProtonToNeutron(tradeAmount);
+
+        assertGt(quotedDevFee, 0, "dev fee should be positive");
+
+        uint256 devBalBefore = testBase.balanceOf(devReceiver);
+        vm.prank(trader);
+        (uint256 actualNeutron, uint256 actualFeeWad) =
+            highDevReactor.transmuteProtonToNeutron(tradeAmount, quotedNeutron, recipient);
+
+        assertEq(actualNeutron, quotedNeutron, "Neutron output mismatch with dev fee");
+        assertEq(actualFeeWad, quotedFeeWad, "FeeWad mismatch with dev fee");
+        assertEq(testBase.balanceOf(devReceiver) - devBalBefore, quotedDevFee, "Dev fee transferred mismatch");
+
+        // Verify that both quote and execution properly revert when dev fee transfer pushes reserve below critical
+        uint256 excessiveProton = protonBalance;
+        vm.expectRevert(StableCoinReactor.ResultingReserveRatioBelowCritical.selector);
+        highDevReactor.quoteTransmuteProtonToNeutron(excessiveProton);
+
+        vm.prank(trader);
+        vm.expectRevert(StableCoinReactor.ResultingReserveRatioBelowCritical.selector);
+        highDevReactor.transmuteProtonToNeutron(excessiveProton, 0, recipient);
     }
 }

@@ -363,21 +363,11 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     function neutronPriceInPeggedAsset() external view returns (uint256) {
-        uint256 basePrice = getBasePriceInPeggedAsset();
-        uint256 neutronBase =
-            _neutronPriceInBase(_normalizedReserve(), NEUTRON_TOKEN.totalSupply(), basePrice, Math.Rounding.Floor);
-        return Math.mulDiv(neutronBase, basePrice, WAD);
+        return Math.mulDiv(neutronPriceInBase(), getBasePriceInPeggedAsset(), WAD);
     }
 
     function protonPriceInPeggedAsset() external view returns (uint256) {
-        uint256 basePrice = getBasePriceInPeggedAsset();
-        uint256 normalizedReserve = _normalizedReserve();
-        uint256 neutronSupply = NEUTRON_TOKEN.totalSupply();
-        uint256 protonBase = _protonPriceInBase(
-            normalizedReserve, PROTON_TOKEN.totalSupply(), neutronSupply, basePrice, Math.Rounding.Floor
-        );
-
-        return Math.mulDiv(protonBase, basePrice, WAD);
+        return Math.mulDiv(protonPriceInBase(), getBasePriceInPeggedAsset(), WAD);
     }
 
     function reserveRatioPeggedAsset() public view returns (uint256) {
@@ -427,26 +417,17 @@ contract StableCoinReactor is ReentrancyGuard {
         fissionAux(amountIn, to, reserveRatio, reserveBaseline, basePrice);
     }
 
-    function fissionAux(uint256 amountIn, address to, uint256 reserveRatio, uint256 reserveBaseline, uint256 basePrice)
-        internal
-        returns (uint256 neutronOut, uint256 protonOut)
-    {
-        uint256 protonSupplyBefore = PROTON_TOKEN.totalSupply();
-        uint256 neutronSupplyBefore = NEUTRON_TOKEN.totalSupply();
-
-        // Snapshot the bootstrap price before a token hook can call adjustPeg().
+    function _calculateFission(
+        uint256 depositAmount,
+        uint256 reserveBaseline,
+        uint256 neutronSupplyBefore,
+        uint256 protonSupplyBefore,
+        uint256 basePrice,
+        uint256 reserveRatio
+    ) internal view returns (uint256 neutronOut, uint256 protonOut, uint256 protocolFee, uint256 devFeeAmount) {
         uint256 adjustedBasePrice = protonSupplyBefore == 0 ? Math.mulDiv(basePrice, PEG_FACTOR_SCALE, pegFactor) : 0;
-
-        // ERC-20 boundary. reserveBaseline, received and fee are in the token's native units:
-        // the deposit is measured against a live balance; only the separate dev fee is transferred.
-        BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
-        uint256 received = reserve() - reserveBaseline;
-
-        (uint256 netAmount, uint256 fee, uint256 devFeeAmount) = _deductFees(received, FISSION_FEE);
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
-
-        // Accounting boundary. Every reserve amount below is in the protocol representation;
-        // The event reports received funds, retained protocol fees and dev fees in native units.
+        uint256 netAmount;
+        (netAmount, protocolFee, devFeeAmount) = _deductFees(depositAmount, FISSION_FEE);
         uint256 net = _baseToWad(netAmount);
         uint256 reserveBefore = _baseToWad(reserveBaseline);
 
@@ -454,10 +435,29 @@ contract StableCoinReactor is ReentrancyGuard {
             neutronOut = Math.mulDiv(net, adjustedBasePrice, reserveRatio);
             protonOut = Math.mulDiv(net, reserveRatio - WAD, reserveRatio);
         } else {
-            // Mint proportional claims without a rounded price or ratio intermediate.
             neutronOut = Math.mulDiv(net, neutronSupplyBefore, reserveBefore);
             protonOut = Math.mulDiv(net, protonSupplyBefore, reserveBefore);
         }
+    }
+
+    function fissionAux(uint256 amountIn, address to, uint256 reserveRatio, uint256 reserveBaseline, uint256 basePrice)
+        internal
+        returns (uint256 neutronOut, uint256 protonOut)
+    {
+        uint256 protonSupplyBefore = PROTON_TOKEN.totalSupply();
+        uint256 neutronSupplyBefore = NEUTRON_TOKEN.totalSupply();
+
+        // ERC-20 boundary. reserveBaseline, received and fee are in the token's native units:
+        // the deposit is measured against a live balance; only the separate dev fee is transferred.
+        BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amountIn);
+        uint256 received = reserve() - reserveBaseline;
+
+        uint256 fee;
+        uint256 devFeeAmount;
+        (neutronOut, protonOut, fee, devFeeAmount) = _calculateFission(
+            received, reserveBaseline, neutronSupplyBefore, protonSupplyBefore, basePrice, reserveRatio
+        );
+        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
 
         NEUTRON_TOKEN.mint(to, neutronOut);
         PROTON_TOKEN.mint(to, protonOut);
@@ -465,30 +465,35 @@ contract StableCoinReactor is ReentrancyGuard {
         emit Fission(msg.sender, to, received, neutronOut, protonOut, fee, devFeeAmount);
     }
 
-    function fusion(uint256 m, address to) external nonReentrant {
+    function _calculateFusion(uint256 m, uint256 basePrice)
+        internal
+        view
+        returns (uint256 neutronBurn, uint256 protonBurn, uint256 netBaseOut, uint256 protocolFee, uint256 devFeeAmount)
+    {
         if (m == 0) revert AmountZero();
-        // Entry boundary: the reserve and the requested amount are converted once, here.
-        // The payout and dev fee leave in native units; the fusion fee stays in the reserve.
         uint256 normalizedReserve = _normalizedReserve();
         if (normalizedReserve == 0) revert EmptyReserve();
-
-        uint256 baseOut = _baseToWad(m);
 
         uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
         uint256 protonSupplyTotal = PROTON_TOKEN.totalSupply();
         if (neutronSupplyTotal == 0 || protonSupplyTotal == 0) revert EmptySupply();
 
-        uint256 basePrice = _readAndCacheBasePrice();
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyTotal, basePrice);
         _requireOperatingRange(reserveRatio);
 
-        uint256 nBurn = Math.mulDiv(baseOut, neutronSupplyTotal, normalizedReserve, Math.Rounding.Ceil);
-        uint256 pBurn = Math.mulDiv(baseOut, protonSupplyTotal, normalizedReserve, Math.Rounding.Ceil);
+        uint256 baseOut = _baseToWad(m);
+        neutronBurn = Math.mulDiv(baseOut, neutronSupplyTotal, normalizedReserve, Math.Rounding.Ceil);
+        protonBurn = Math.mulDiv(baseOut, protonSupplyTotal, normalizedReserve, Math.Rounding.Ceil);
+
+        (netBaseOut, protocolFee, devFeeAmount) = _deductFees(m, FUSION_FEE);
+    }
+
+    function fusion(uint256 m, address to) external nonReentrant {
+        uint256 basePrice = _readAndCacheBasePrice();
+        (uint256 nBurn, uint256 pBurn, uint256 net, uint256 fee, uint256 devFeeAmount) = _calculateFusion(m, basePrice);
 
         NEUTRON_TOKEN.burn(msg.sender, nBurn);
         PROTON_TOKEN.burn(msg.sender, pBurn);
-
-        (uint256 net, uint256 fee, uint256 devFeeAmount) = _deductFees(m, FUSION_FEE);
 
         BASE_TOKEN.safeTransfer(to, net);
         if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
@@ -530,16 +535,19 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     function _decayLedger() internal {
-        uint256 t = block.timestamp;
-        uint256 dt = t - lastDecayTs;
-        if (dt == 0) return;
-        if (decayPerSecondWad == WAD) {
-            // no decay
-            lastDecayTs = t;
-            return;
+        if (block.timestamp != lastDecayTs) {
+            (decayedVolumePlusBase, decayedVolumeMinusBase) = _getDecayedVolumes();
+            lastDecayTs = block.timestamp;
         }
-        (decayedVolumePlusBase, decayedVolumeMinusBase) = _getDecayedVolumes();
-        lastDecayTs = t;
+    }
+
+    function _deductBetaFees(uint256 grossBase, uint256 feeWad)
+        internal
+        view
+        returns (uint256 netBase, uint256 protocolFeeAmount, uint256 devFeeAmount)
+    {
+        (uint256 net, uint256 protoWad, uint256 devWad) = _deductFees(grossBase, feeWad);
+        return (net, Math.mulDiv(protoWad, BASE_TOKEN_UNIT, WAD), Math.mulDiv(devWad, BASE_TOKEN_UNIT, WAD));
     }
 
     function _betaPlusFeeWad(uint256 normalizedReserve) internal view returns (uint256) {
@@ -562,57 +570,81 @@ contract StableCoinReactor is ReentrancyGuard {
         return Math.min(betaPhi0 + volumeFee, WAD);
     }
 
+    function _calculateTransmuteProtonToNeutron(uint256 protonIn, uint256 basePrice)
+        internal
+        view
+        returns (
+            uint256 neutronOut,
+            uint256 feeWad,
+            uint256 protocolFeeAmount,
+            uint256 devFeeAmount,
+            uint256 grossBase,
+            bool isZeroPrice
+        )
+    {
+        if (protonIn == 0) revert AmountZero();
+        if (basePrice == 0) return (0, 0, 0, 0, 0, true);
+
+        uint256 rawReserve = reserve();
+        uint256 normalizedReserve = _baseToWad(rawReserve);
+        uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
+        uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
+
+        uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
+        _requireOperatingRange(reserveRatio);
+
+        uint256 floorNeutronPrice =
+            _neutronPriceInBase(normalizedReserve, neutronSupplyCached, basePrice, Math.Rounding.Floor);
+        uint256 protonPriceBase = _protonPriceInBase(
+            normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice, Math.Rounding.Floor
+        );
+        if (protonPriceBase == 0 || floorNeutronPrice == 0) return (0, 0, 0, 0, 0, true);
+
+        uint256 neutronPriceBase =
+            _neutronPriceInBase(normalizedReserve, neutronSupplyCached, basePrice, Math.Rounding.Ceil);
+        grossBase = Math.mulDiv(protonIn, protonPriceBase, WAD);
+
+        feeWad = _betaPlusFeeWad(normalizedReserve);
+        uint256 netBase;
+        (netBase, protocolFeeAmount, devFeeAmount) = _deductBetaFees(grossBase, feeWad);
+
+        neutronOut = Math.mulDiv(netBase, WAD, neutronPriceBase);
+
+        // Resulting reserve ratio is evaluated after developer fee is transferred out
+        uint256 reserveAfterDevFee = _baseToWad(rawReserve > devFeeAmount ? rawReserve - devFeeAmount : 0);
+        uint256 resultingNeutronSupply = neutronSupplyCached + neutronOut;
+        uint256 resultingReserveRatio = _reserveRatioWad(reserveAfterDevFee, resultingNeutronSupply, basePrice);
+        if (resultingReserveRatio < CRITICAL_RESERVE_RATIO) {
+            revert ResultingReserveRatioBelowCritical();
+        }
+    }
+
     function transmuteProtonToNeutron(uint256 protonIn, uint256 minNeutronOut, address to)
         external
         nonReentrant
         returns (uint256 neutronOut, uint256 feeWad)
     {
-        if (protonIn == 0) revert AmountZero();
-        uint256 normalizedReserve = _normalizedReserve();
-        uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
-        uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
-
         uint256 basePrice = _readAndCacheBasePrice();
-        if (basePrice == 0) {
+        uint256 devFeeAmount;
+        uint256 grossBase;
+        bool isZeroPrice;
+        (neutronOut, feeWad,, devFeeAmount, grossBase, isZeroPrice) =
+            _calculateTransmuteProtonToNeutron(protonIn, basePrice);
+
+        if (isZeroPrice) {
             if (minNeutronOut != 0) revert ExcessiveSlippage();
             return (0, 0);
         }
 
-        uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
-        _requireOperatingRange(reserveRatio);
-
-        (uint256 neutronPriceBase, uint256 protonPriceBase) =
-            _pricesInBase(normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice);
-
-        if (protonPriceBase == 0 || neutronPriceBase == 0) {
-            if (minNeutronOut != 0) revert ExcessiveSlippage();
-            return (0, 0);
-        }
-
-        // Preserve the zero-price no-op above; price minted Neutrons up.
-        neutronPriceBase = _neutronPriceInBase(normalizedReserve, neutronSupplyCached, basePrice, Math.Rounding.Ceil);
-        uint256 grossBase = Math.mulDiv(protonIn, protonPriceBase, WAD);
-        _decayLedger();
-        feeWad = _betaPlusFeeWad(normalizedReserve);
-        (uint256 netBase,, uint256 devFeeBaseWad) = _deductFees(grossBase, feeWad);
-        uint256 devFeeAmount = Math.mulDiv(devFeeBaseWad, BASE_TOKEN_UNIT, WAD);
-
-        neutronOut = Math.mulDiv(netBase, WAD, neutronPriceBase);
         if (neutronOut < minNeutronOut) revert ExcessiveSlippage();
 
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
-        uint256 resultingNeutronSupply = neutronSupplyCached + neutronOut;
-        uint256 resultingReserveRatio = _reserveRatioWad(_normalizedReserve(), resultingNeutronSupply, basePrice);
-        if (resultingReserveRatio < CRITICAL_RESERVE_RATIO) {
-            revert ResultingReserveRatioBelowCritical();
-        }
-
+        _decayLedger();
         uint256 newVolume = decayedVolumePlusBase + grossBase;
+        decayedVolumePlusBase = newVolume;
 
         PROTON_TOKEN.burn(msg.sender, protonIn);
         NEUTRON_TOKEN.mint(to, neutronOut);
-
-        decayedVolumePlusBase = newVolume;
+        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
 
         emit TransmutePlus(
             msg.sender, to, protonIn, neutronOut, feeWad, newVolume, decayedVolumeMinusBase, devFeeAmount
@@ -623,52 +655,72 @@ contract StableCoinReactor is ReentrancyGuard {
      * β- : convert NEUTRON_TOKEN -> PROTON_TOKEN
      */
 
-    function transmuteNeutronToProton(uint256 neutronIn, uint256 minProtonOut, address to)
-        external
-        nonReentrant
-        returns (uint256 protonOut, uint256 feeWad)
+    function _calculateTransmuteNeutronToProton(uint256 neutronIn, uint256 basePrice)
+        internal
+        view
+        returns (
+            uint256 protonOut,
+            uint256 feeWad,
+            uint256 protocolFeeAmount,
+            uint256 devFeeAmount,
+            uint256 grossBase,
+            bool isZeroPrice
+        )
     {
         if (neutronIn == 0) revert AmountZero();
+        if (basePrice == 0) return (0, 0, 0, 0, 0, true);
 
         uint256 normalizedReserve = _normalizedReserve();
         uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
         uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
 
-        uint256 basePrice = _readAndCacheBasePrice();
-        if (basePrice == 0) {
-            if (minProtonOut != 0) revert ExcessiveSlippage();
-            return (0, 0);
-        }
-
         uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
         _requireOperatingRange(reserveRatio);
 
-        (uint256 neutronPriceBase, uint256 protonPriceBase) =
-            _pricesInBase(normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice);
+        uint256 neutronPriceBase =
+            _neutronPriceInBase(normalizedReserve, neutronSupplyCached, basePrice, Math.Rounding.Floor);
+        uint256 floorProtonPrice = _protonPriceInBase(
+            normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice, Math.Rounding.Floor
+        );
+        if (floorProtonPrice == 0 || neutronPriceBase == 0) return (0, 0, 0, 0, 0, true);
 
-        if (protonPriceBase == 0 || neutronPriceBase == 0) {
+        uint256 protonPriceBase = _protonPriceInBase(
+            normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice, Math.Rounding.Ceil
+        );
+        grossBase = Math.mulDiv(neutronIn, neutronPriceBase, WAD);
+
+        feeWad = _betaMinusFeeWad(normalizedReserve);
+        uint256 netBase;
+        (netBase, protocolFeeAmount, devFeeAmount) = _deductBetaFees(grossBase, feeWad);
+
+        protonOut = Math.mulDiv(netBase, WAD, protonPriceBase);
+    }
+
+    function transmuteNeutronToProton(uint256 neutronIn, uint256 minProtonOut, address to)
+        external
+        nonReentrant
+        returns (uint256 protonOut, uint256 feeWad)
+    {
+        uint256 basePrice = _readAndCacheBasePrice();
+        uint256 devFeeAmount;
+        uint256 grossBase;
+        bool isZeroPrice;
+        (protonOut, feeWad,, devFeeAmount, grossBase, isZeroPrice) =
+            _calculateTransmuteNeutronToProton(neutronIn, basePrice);
+
+        if (isZeroPrice) {
             if (minProtonOut != 0) revert ExcessiveSlippage();
             return (0, 0);
         }
 
-        protonPriceBase = _protonPriceInBase(
-            normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice, Math.Rounding.Ceil
-        );
-        uint256 grossBase = Math.mulDiv(neutronIn, neutronPriceBase, WAD);
-
-        _decayLedger();
-        feeWad = _betaMinusFeeWad(normalizedReserve);
-        (uint256 netBase,, uint256 devFeeBaseWad) = _deductFees(grossBase, feeWad);
-        uint256 devFeeAmount = Math.mulDiv(devFeeBaseWad, BASE_TOKEN_UNIT, WAD);
-
-        protonOut = Math.mulDiv(netBase, WAD, protonPriceBase);
         if (protonOut < minProtonOut) revert ExcessiveSlippage();
 
+        _decayLedger();
         uint256 newVolume = decayedVolumeMinusBase + grossBase;
+        decayedVolumeMinusBase = newVolume;
 
         NEUTRON_TOKEN.burn(msg.sender, neutronIn);
         PROTON_TOKEN.mint(to, protonOut);
-        decayedVolumeMinusBase = newVolume;
         if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
 
         emit TransmuteMinus(
@@ -686,6 +738,7 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     /// @notice Previews the outcome of a fission operation.
+    /// @dev For fee-on-transfer tokens, callers should pass the expected net received amount.
     /// @param amountIn Amount of base token to deposit (native units).
     /// @return neutronOut Amount of Neutron tokens minted.
     /// @return protonOut Amount of Proton tokens minted.
@@ -706,29 +759,10 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 reserveRatio = _reserveRatioWad(_baseToWad(reserveBaseline), neutronSupplyBefore, basePrice);
         _requireOperatingRange(reserveRatio);
 
-        uint256 adjustedBasePrice = protonSupplyBefore == 0 ? Math.mulDiv(basePrice, PEG_FACTOR_SCALE, pegFactor) : 0;
-
-        uint256 netAmount;
-        (netAmount, protocolFee, devFeeAmount) = _deductFees(amountIn, FISSION_FEE);
-        uint256 net = _baseToWad(netAmount);
-        uint256 reserveBefore = _baseToWad(reserveBaseline);
-
-        if (protonSupplyBefore == 0) {
-            neutronOut = Math.mulDiv(net, adjustedBasePrice, reserveRatio);
-            protonOut = Math.mulDiv(net, reserveRatio - WAD, reserveRatio);
-        } else {
-            neutronOut = Math.mulDiv(net, neutronSupplyBefore, reserveBefore);
-            protonOut = Math.mulDiv(net, protonSupplyBefore, reserveBefore);
-        }
-    }
-
-    /// @notice Alias for quoteFission.
-    function previewFission(uint256 amountIn)
-        external
-        view
-        returns (uint256 neutronOut, uint256 protonOut, uint256 protocolFee, uint256 devFeeAmount)
-    {
-        return quoteFission(amountIn);
+        return
+            _calculateFission(
+                amountIn, reserveBaseline, neutronSupplyBefore, protonSupplyBefore, basePrice, reserveRatio
+            );
     }
 
     /// @notice Previews the outcome of a fusion operation.
@@ -743,33 +777,7 @@ contract StableCoinReactor is ReentrancyGuard {
         view
         returns (uint256 neutronBurn, uint256 protonBurn, uint256 netBaseOut, uint256 protocolFee, uint256 devFeeAmount)
     {
-        if (m == 0) revert AmountZero();
-        uint256 normalizedReserve = _normalizedReserve();
-        if (normalizedReserve == 0) revert EmptyReserve();
-
-        uint256 baseOut = _baseToWad(m);
-
-        uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
-        uint256 protonSupplyTotal = PROTON_TOKEN.totalSupply();
-        if (neutronSupplyTotal == 0 || protonSupplyTotal == 0) revert EmptySupply();
-
-        uint256 basePrice = getBasePriceInPeggedAsset();
-        uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyTotal, basePrice);
-        _requireOperatingRange(reserveRatio);
-
-        neutronBurn = Math.mulDiv(baseOut, neutronSupplyTotal, normalizedReserve, Math.Rounding.Ceil);
-        protonBurn = Math.mulDiv(baseOut, protonSupplyTotal, normalizedReserve, Math.Rounding.Ceil);
-
-        (netBaseOut, protocolFee, devFeeAmount) = _deductFees(m, FUSION_FEE);
-    }
-
-    /// @notice Alias for quoteFusion.
-    function previewFusion(uint256 m)
-        external
-        view
-        returns (uint256 neutronBurn, uint256 protonBurn, uint256 netBaseOut, uint256 protocolFee, uint256 devFeeAmount)
-    {
-        return quoteFusion(m);
+        return _calculateFusion(m, getBasePriceInPeggedAsset());
     }
 
     /// @notice Previews the transmutation from Proton to Neutron (beta+).
@@ -783,50 +791,8 @@ contract StableCoinReactor is ReentrancyGuard {
         view
         returns (uint256 neutronOut, uint256 feeWad, uint256 protocolFeeAmount, uint256 devFeeAmount)
     {
-        if (protonIn == 0) revert AmountZero();
-        uint256 normalizedReserve = _normalizedReserve();
-        uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
-        uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
-
-        uint256 basePrice = getBasePriceInPeggedAsset();
-        if (basePrice == 0) {
-            return (0, 0, 0, 0);
-        }
-
-        uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
-        _requireOperatingRange(reserveRatio);
-
-        (uint256 neutronPriceBase, uint256 protonPriceBase) =
-            _pricesInBase(normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice);
-
-        if (protonPriceBase == 0 || neutronPriceBase == 0) {
-            return (0, 0, 0, 0);
-        }
-
-        neutronPriceBase = _neutronPriceInBase(normalizedReserve, neutronSupplyCached, basePrice, Math.Rounding.Ceil);
-        uint256 grossBase = Math.mulDiv(protonIn, protonPriceBase, WAD);
-
-        feeWad = _betaPlusFeeWad(normalizedReserve);
-        (uint256 netBase, uint256 protocolFeeBase, uint256 devFeeBaseWad) = _deductFees(grossBase, feeWad);
-        devFeeAmount = Math.mulDiv(devFeeBaseWad, BASE_TOKEN_UNIT, WAD);
-        protocolFeeAmount = Math.mulDiv(protocolFeeBase, BASE_TOKEN_UNIT, WAD);
-
-        neutronOut = Math.mulDiv(netBase, WAD, neutronPriceBase);
-
-        uint256 resultingNeutronSupply = neutronSupplyCached + neutronOut;
-        uint256 resultingReserveRatio = _reserveRatioWad(_normalizedReserve(), resultingNeutronSupply, basePrice);
-        if (resultingReserveRatio < CRITICAL_RESERVE_RATIO) {
-            revert ResultingReserveRatioBelowCritical();
-        }
-    }
-
-    /// @notice Alias for quoteTransmuteProtonToNeutron.
-    function previewTransmuteProtonToNeutron(uint256 protonIn)
-        external
-        view
-        returns (uint256 neutronOut, uint256 feeWad, uint256 protocolFeeAmount, uint256 devFeeAmount)
-    {
-        return quoteTransmuteProtonToNeutron(protonIn);
+        (neutronOut, feeWad, protocolFeeAmount, devFeeAmount,,) =
+            _calculateTransmuteProtonToNeutron(protonIn, getBasePriceInPeggedAsset());
     }
 
     /// @notice Previews the transmutation from Neutron to Proton (beta-).
@@ -840,47 +806,8 @@ contract StableCoinReactor is ReentrancyGuard {
         view
         returns (uint256 protonOut, uint256 feeWad, uint256 protocolFeeAmount, uint256 devFeeAmount)
     {
-        if (neutronIn == 0) revert AmountZero();
-
-        uint256 normalizedReserve = _normalizedReserve();
-        uint256 protonSupplyCached = PROTON_TOKEN.totalSupply();
-        uint256 neutronSupplyCached = NEUTRON_TOKEN.totalSupply();
-
-        uint256 basePrice = getBasePriceInPeggedAsset();
-        if (basePrice == 0) {
-            return (0, 0, 0, 0);
-        }
-
-        uint256 reserveRatio = _reserveRatioWad(normalizedReserve, neutronSupplyCached, basePrice);
-        _requireOperatingRange(reserveRatio);
-
-        (uint256 neutronPriceBase, uint256 protonPriceBase) =
-            _pricesInBase(normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice);
-
-        if (protonPriceBase == 0 || neutronPriceBase == 0) {
-            return (0, 0, 0, 0);
-        }
-
-        protonPriceBase = _protonPriceInBase(
-            normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice, Math.Rounding.Ceil
-        );
-        uint256 grossBase = Math.mulDiv(neutronIn, neutronPriceBase, WAD);
-
-        feeWad = _betaMinusFeeWad(normalizedReserve);
-        (uint256 netBase, uint256 protocolFeeBase, uint256 devFeeBaseWad) = _deductFees(grossBase, feeWad);
-        devFeeAmount = Math.mulDiv(devFeeBaseWad, BASE_TOKEN_UNIT, WAD);
-        protocolFeeAmount = Math.mulDiv(protocolFeeBase, BASE_TOKEN_UNIT, WAD);
-
-        protonOut = Math.mulDiv(netBase, WAD, protonPriceBase);
-    }
-
-    /// @notice Alias for quoteTransmuteNeutronToProton.
-    function previewTransmuteNeutronToProton(uint256 neutronIn)
-        external
-        view
-        returns (uint256 protonOut, uint256 feeWad, uint256 protocolFeeAmount, uint256 devFeeAmount)
-    {
-        return quoteTransmuteNeutronToProton(neutronIn);
+        (protonOut, feeWad, protocolFeeAmount, devFeeAmount,,) =
+            _calculateTransmuteNeutronToProton(neutronIn, getBasePriceInPeggedAsset());
     }
 
     function _neutronPriceInBase(
@@ -899,18 +826,6 @@ contract StableCoinReactor is ReentrancyGuard {
             WAD,
             neutronSupplyTokens,
             rounding
-        );
-    }
-
-    function _pricesInBase(
-        uint256 normalizedReserve,
-        uint256 protonSupplyTokens,
-        uint256 neutronSupplyTokens,
-        uint256 basePrice
-    ) internal view returns (uint256 neutronPriceBase, uint256 protonPriceBase) {
-        neutronPriceBase = _neutronPriceInBase(normalizedReserve, neutronSupplyTokens, basePrice, Math.Rounding.Floor);
-        protonPriceBase = _protonPriceInBase(
-            normalizedReserve, protonSupplyTokens, neutronSupplyTokens, basePrice, Math.Rounding.Floor
         );
     }
 

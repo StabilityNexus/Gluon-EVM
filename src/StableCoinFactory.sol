@@ -82,18 +82,6 @@ contract StableCoinFactory {
         uint256 betaPhi1Param,
         uint256 decayPerSecondWadParam
     ) public returns (address) {
-        if (bytes(vaultNameParam).length == 0) revert EmptyVaultName();
-        if (bytes(baseAssetNameParam).length == 0) revert EmptyBaseName();
-        if (bytes(baseAssetSymbolParam).length == 0) revert EmptyBaseSymbol();
-        if (bytes(peggedAssetNameParam).length == 0) revert EmptyPegName();
-        if (bytes(peggedAssetSymbolParam).length == 0) revert EmptyPegSymbol();
-        if (bytes(protonNameParam).length == 0) revert EmptyProtonName();
-        if (bytes(protonSymbolParam).length == 0) revert EmptyProtonSymbol();
-        if (baseTokenParam == address(0)) revert InvalidBase();
-        if (oracleParam == address(0)) revert InvalidOracle();
-        if (fissionFeeParam >= ProtocolConstants.WAD - devFee) revert InvalidFissionFee();
-        if (fusionFeeParam >= ProtocolConstants.WAD - devFee) revert InvalidFusionFee();
-        if (criticalReserveRatioWadParam <= ProtocolConstants.WAD) revert InvalidCriticalReserveRatio();
         if (initialReserveParam == 0) revert InvalidInitialReserve();
 
         StableCoinReactor reactor = new StableCoinReactor(
