@@ -16,7 +16,7 @@ uint256 constant WAD = 1e18;
 contract InvariantOracle is IOracle {
     error OracleDown();
 
-    uint256 private value;
+    uint256 public value;
     bool public reverting;
 
     constructor(uint256 valueParam) {
@@ -98,6 +98,8 @@ contract ReactorHandler is Test {
     uint256 private ghostVolumePlus;
     uint256 private ghostVolumeMinus;
     uint256 private ghostVolumeTime;
+    // The cached price the reactor should hold, modelled from the oracle alone.
+    uint256 public ghostCachedPrice;
     string public violation;
     bytes public unexpectedRevert;
 
@@ -112,6 +114,8 @@ contract ReactorHandler is Test {
         ghostBaseIn = reactorParam.reserve();
         // The reactor starts its volume ledger in this block.
         ghostVolumeTime = block.timestamp;
+        // The initial fission cached the oracle's starting price.
+        ghostCachedPrice = oracleParam.value();
 
         actors.push(makeAddr("invariant actor 1"));
         actors.push(makeAddr("invariant actor 2"));
@@ -133,6 +137,7 @@ contract ReactorHandler is Test {
         base.approve(address(reactor), amount);
         vm.recordLogs();
         try reactor.fission(amount, recipient) {
+            _recordOracleRead();
             uint256 devPaid = base.balanceOf(devFeeReceiver) - before.devBalance;
             ghostBaseIn += amount;
             ghostBaseOut += devPaid;
@@ -178,6 +183,7 @@ contract ReactorHandler is Test {
         vm.startPrank(actor);
         vm.recordLogs();
         try reactor.fusion(amount, recipient) {
+            _recordOracleRead();
             uint256 userPaid = base.balanceOf(recipient) - before.recipientBase;
             uint256 devPaid = base.balanceOf(devFeeReceiver) - before.devBalance;
             ghostBaseOut += userPaid + devPaid;
@@ -221,6 +227,7 @@ contract ReactorHandler is Test {
         try reactor.transmuteProtonToNeutron(trade.amountIn, 0, trade.recipient) returns (
             uint256 neutronOut, uint256 feeWad
         ) {
+            _recordOracleRead();
             trade.amountOut = neutronOut;
             trade.feeWad = feeWad;
             _checkTransmutation(before, trade, "beta plus");
@@ -254,6 +261,7 @@ contract ReactorHandler is Test {
         try reactor.transmuteNeutronToProton(trade.amountIn, 0, trade.recipient) returns (
             uint256 protonOut, uint256 feeWad
         ) {
+            _recordOracleRead();
             trade.amountOut = protonOut;
             trade.feeWad = feeWad;
             _checkTransmutation(before, trade, "beta minus");
@@ -289,6 +297,7 @@ contract ReactorHandler is Test {
             uint256 factor = reactor.pegFactor();
             vm.recordLogs();
             try reactor.adjustPeg() {
+                _recordOracleRead();
                 uint256 expected = factor;
                 if (basePrice != 0) {
                     _check(!_inRange(ratio), "peg adjusted inside range");
@@ -337,6 +346,17 @@ contract ReactorHandler is Test {
 
     function warp(uint256 secondsRaw) external {
         vm.warp(block.timestamp + _bound(secondsRaw, 1, 1 days));
+    }
+
+    // The price the reactor should report: the oracle's value, or the modelled cache while the oracle reverts.
+    function expectedPrice() external view returns (uint256) {
+        return oracle.reverting() ? ghostCachedPrice : oracle.value();
+    }
+
+    // Every successful operation reads the oracle once. A live nonzero reading replaces the cache; a zero
+    // reading or an outage keeps it. Reverted operations roll the cache back, so they are not recorded.
+    function _recordOracleRead() private {
+        if (!oracle.reverting() && oracle.value() != 0) ghostCachedPrice = oracle.value();
     }
 
     function _trade(address actor, address recipient, bool plus, uint256 amountIn)
@@ -720,6 +740,13 @@ abstract contract ReactorInvariantBase is Test {
         uint256 basePrice = reactor.getBasePriceInPeggedAsset();
         assertEq(reactor.neutronPriceInPeggedAsset(), Math.mulDiv(reactor.neutronPriceInBase(), basePrice, WAD));
         assertEq(reactor.protonPriceInPeggedAsset(), Math.mulDiv(reactor.protonPriceInBase(), basePrice, WAD));
+    }
+
+    // The reactor prices with the live oracle, falls back to its cache only while the oracle reverts, and
+    // caches exactly the nonzero prices its successful operations read.
+    function invariant_oraclePriceAndCacheMatchModel() public view {
+        assertEq(reactor.getBasePriceInPeggedAsset(), handler.expectedPrice());
+        assertEq(reactor.lastSuccessfulBasePrice(), handler.ghostCachedPrice());
     }
 
     function invariant_handlerPropertiesHold() public view {
