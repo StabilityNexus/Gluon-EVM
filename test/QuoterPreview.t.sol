@@ -352,4 +352,96 @@ contract QuoterPreviewTest is Test {
         vm.expectRevert(StableCoinReactor.ResultingReserveRatioBelowCritical.selector);
         highDevReactor.transmuteProtonToNeutron(excessiveProton, 0, recipient);
     }
+
+    function testBetaFeeQuotesWithSixDecimalBaseToken() public {
+        MockDecimalERC20 base6 = new MockDecimalERC20("USD Coin", "USDC", 6);
+        GenericMockOracle oracle6 = new GenericMockOracle(WAD);
+        address sixDev = makeAddr("sixDev");
+        uint256 devFeeWad = 5e16; // 5% dev fee
+        StableCoinFactory factory6 = new StableCoinFactory(sixDev, devFeeWad);
+
+        uint256 initialDeposit = 10_000 * 1e6;
+        base6.mint(address(this), initialDeposit);
+        base6.approve(address(factory6), initialDeposit);
+
+        StableCoinReactor reactor6 = StableCoinReactor(
+            factory6.deployReactor(
+                "USDC Vault",
+                "USD Coin",
+                "USDC",
+                "Neutron USD",
+                "nUSD",
+                address(base6),
+                address(oracle6),
+                "Proton USD",
+                "pUSD",
+                1e16, // 1% fission fee
+                1e16, // 1% fusion fee
+                101e16, // critical reserve ratio: 1.01
+                15e17, // initial reserve ratio: 1.5
+                initialDeposit,
+                2e16, // betaPhi0: 2%
+                1e16, // betaPhi1: 1%
+                99e16 // decayPerSecond: 99%
+            )
+        );
+
+        address trader = makeAddr("sixTrader");
+        uint256 traderDeposit = 5_000 * 1e6;
+        base6.mint(trader, traderDeposit);
+        vm.startPrank(trader);
+        base6.approve(address(reactor6), traderDeposit);
+        reactor6.fission(traderDeposit, trader);
+        vm.stopPrank();
+
+        uint256 tradeAmount = 100e18; // 100 Proton
+
+        // Quote Beta+ (Proton -> Neutron)
+        (uint256 quotedNeutron, uint256 quotedFeeWad, uint256 quotedProtoFee, uint256 quotedDevFee) =
+            reactor6.quoteTransmuteProtonToNeutron(tradeAmount);
+
+        assertGt(quotedNeutron, 0);
+        assertGt(quotedFeeWad, 0);
+        assertGt(quotedProtoFee, 0, "protocol fee should be positive in 6 decimals");
+        assertGt(quotedDevFee, 0, "dev fee should be positive in 6 decimals");
+        // Ensure fees are scaled to 6 decimals (< 1000 * 1e6), not 18 decimals (> 1e15)
+        assertLt(quotedDevFee, 1000 * 1e6, "Dev fee must be in 6 decimal native units");
+        assertLt(quotedProtoFee, 1000 * 1e6, "Proto fee must be in 6 decimal native units");
+
+        uint256 devBalBefore = base6.balanceOf(sixDev);
+        uint256 recipientNeutronBefore = reactor6.NEUTRON_TOKEN().balanceOf(recipient);
+
+        vm.prank(trader);
+        (uint256 actualNeutron, uint256 actualFeeWad) =
+            reactor6.transmuteProtonToNeutron(tradeAmount, quotedNeutron, recipient);
+
+        assertEq(actualNeutron, quotedNeutron, "Neutron output mismatch in 6 decimals");
+        assertEq(actualFeeWad, quotedFeeWad, "FeeWad mismatch in 6 decimals");
+        assertEq(reactor6.NEUTRON_TOKEN().balanceOf(recipient) - recipientNeutronBefore, quotedNeutron);
+        assertEq(base6.balanceOf(sixDev) - devBalBefore, quotedDevFee, "Dev fee transfer mismatch in 6 decimals");
+
+        // Quote Beta- (Neutron -> Proton)
+        uint256 neutronTradeAmount = 50e18;
+        (uint256 quotedProton, uint256 quotedMinusFeeWad, uint256 quotedMinusProtoFee, uint256 quotedMinusDevFee) =
+            reactor6.quoteTransmuteNeutronToProton(neutronTradeAmount);
+
+        assertGt(quotedProton, 0);
+        assertGt(quotedMinusFeeWad, 0);
+        assertGt(quotedMinusProtoFee, 0);
+        assertGt(quotedMinusDevFee, 0);
+        assertLt(quotedMinusDevFee, 1000 * 1e6);
+        assertLt(quotedMinusProtoFee, 1000 * 1e6);
+
+        uint256 devBalBeforeMinus = base6.balanceOf(sixDev);
+        uint256 recipientProtonBefore = reactor6.PROTON_TOKEN().balanceOf(recipient);
+
+        vm.prank(trader);
+        (uint256 actualProton, uint256 actualMinusFeeWad) =
+            reactor6.transmuteNeutronToProton(neutronTradeAmount, quotedProton, recipient);
+
+        assertEq(actualProton, quotedProton, "Proton output mismatch in 6 decimals");
+        assertEq(actualMinusFeeWad, quotedMinusFeeWad, "Minus feeWad mismatch in 6 decimals");
+        assertEq(reactor6.PROTON_TOKEN().balanceOf(recipient) - recipientProtonBefore, quotedProton);
+        assertEq(base6.balanceOf(sixDev) - devBalBeforeMinus, quotedMinusDevFee, "Minus dev fee transfer mismatch");
+    }
 }

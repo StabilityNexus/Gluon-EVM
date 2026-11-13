@@ -695,7 +695,7 @@ contract StableCoinReactor is ReentrancyGuard {
 
     /// @notice Previews the outcome of a fission operation.
     /// @dev For fee-on-transfer tokens, callers should pass the expected net received amount.
-    /// @param amountIn Amount of base token to deposit (native units).
+    /// @param amountIn Expected net amount of base token received by the reactor after transfer (native units).
     /// @return neutronOut Amount of Neutron tokens minted.
     /// @return protonOut Amount of Proton tokens minted.
     /// @return protocolFee Fee retained by protocol reserve (native units).
@@ -720,7 +720,7 @@ contract StableCoinReactor is ReentrancyGuard {
     /// @param m Desired gross base token amount to withdraw (native units).
     /// @return neutronBurn Required Neutron tokens to burn.
     /// @return protonBurn Required Proton tokens to burn.
-    /// @return netBaseOut Net base token amount received by user (native units).
+    /// @return netBaseOut Net base token amount transferred to recipient (native units).
     /// @return protocolFee Fee retained by protocol reserve (native units).
     /// @return devFeeAmount Fee allocated to developer receiver (native units).
     function quoteFusion(uint256 m)
