@@ -532,10 +532,10 @@ contract StableCoinReactor is ReentrancyGuard {
     }
 
     function _decayLedger() internal {
-        if (block.timestamp != lastDecayTs) {
-            (decayedVolumePlusBase, decayedVolumeMinusBase) = _getDecayedVolumes();
-            lastDecayTs = block.timestamp;
-        }
+        uint256 dt = block.timestamp - lastDecayTs;
+        if (dt == 0) return;
+        (decayedVolumePlusBase, decayedVolumeMinusBase) = _getDecayedVolumes();
+        lastDecayTs = block.timestamp;
     }
 
     function _deductBetaFees(uint256 grossBase, uint256 feeWad)
