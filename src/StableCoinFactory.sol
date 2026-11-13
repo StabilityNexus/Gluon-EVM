@@ -36,20 +36,9 @@ contract StableCoinFactory {
     address[] public deployedReactors;
     mapping(address => address[]) public reactorsByBase;
 
-    error EmptyVaultName();
-    error EmptyBaseName();
-    error EmptyBaseSymbol();
-    error EmptyPegName();
-    error EmptyPegSymbol();
-    error EmptyProtonName();
-    error EmptyProtonSymbol();
-    error InvalidBase();
     error InvalidOracle();
     error InvalidDev();
     error InvalidDevFee();
-    error InvalidFissionFee();
-    error InvalidFusionFee();
-    error InvalidCriticalReserveRatio();
     error InvalidInitialReserve();
 
     constructor(address devParam, uint256 devFeeParam) {
@@ -81,19 +70,8 @@ contract StableCoinFactory {
         uint256 betaPhi0Param,
         uint256 betaPhi1Param,
         uint256 decayPerSecondWadParam
-    ) public returns (address) {
-        if (bytes(vaultNameParam).length == 0) revert EmptyVaultName();
-        if (bytes(baseAssetNameParam).length == 0) revert EmptyBaseName();
-        if (bytes(baseAssetSymbolParam).length == 0) revert EmptyBaseSymbol();
-        if (bytes(peggedAssetNameParam).length == 0) revert EmptyPegName();
-        if (bytes(peggedAssetSymbolParam).length == 0) revert EmptyPegSymbol();
-        if (bytes(protonNameParam).length == 0) revert EmptyProtonName();
-        if (bytes(protonSymbolParam).length == 0) revert EmptyProtonSymbol();
-        if (baseTokenParam == address(0)) revert InvalidBase();
+    ) public returns (address reactorAddress) {
         if (oracleParam == address(0)) revert InvalidOracle();
-        if (fissionFeeParam >= ProtocolConstants.WAD - devFee) revert InvalidFissionFee();
-        if (fusionFeeParam >= ProtocolConstants.WAD - devFee) revert InvalidFusionFee();
-        if (criticalReserveRatioWadParam <= ProtocolConstants.WAD) revert InvalidCriticalReserveRatio();
         if (initialReserveParam == 0) revert InvalidInitialReserve();
 
         StableCoinReactor reactor = new StableCoinReactor(
@@ -116,7 +94,7 @@ contract StableCoinFactory {
             decayPerSecondWadParam
         );
 
-        address reactorAddress = address(reactor);
+        reactorAddress = address(reactor);
 
         IERC20 baseToken = IERC20(baseTokenParam);
         uint256 factoryBalanceBefore = baseToken.balanceOf(address(this));
@@ -128,8 +106,6 @@ contract StableCoinFactory {
 
         baseToken.forceApprove(reactorAddress, amountIn);
         reactor.initialFission(amountIn, initialReserveRatioWadParam);
-
-        uint256 initialReserve = reactor.reserve();
 
         deployedReactors.push(reactorAddress);
         reactorsByBase[baseTokenParam].push(reactorAddress);
@@ -149,12 +125,10 @@ contract StableCoinFactory {
             fissionFeeParam,
             fusionFeeParam,
             criticalReserveRatioWadParam,
-            initialReserve,
+            reactor.reserve(),
             dev,
             devFee
         );
-
-        return reactorAddress;
     }
 
     function getDeployedReactorsCount() external view returns (uint256) {
