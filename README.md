@@ -610,7 +610,9 @@ Fission, fusion and beta fees stay in the reserve. A separate constructor-set
 `devFee` is charged on the same gross amount as the operation's protocol fee.
 The user's net value or payout is rounded down after both fee rates are applied.
 The dev payment rounds down; the remaining fee and rounding dust stay in the
-reserve. Only the dev payment is transferred to `devFeeReceiver`.
+reserve. Only the dev payment is transferred to `devFeeReceiver`. If the reserve token
+refuses that transfer, for example because the receiver is blacklisted, the dev payment stays
+in the reserve, the operation still completes and its event reports a dev fee of 0.
 This follows the separation of `f` and `fT` in
 [Djed's fee calculation](https://github.com/DjedAlliance/Djed-Solidity/blob/d15e0eb55376730a4a5ea60615704b7ff5d9c98a/src/Djed.sol#L162).
 
