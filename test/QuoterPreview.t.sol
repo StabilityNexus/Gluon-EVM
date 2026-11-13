@@ -65,7 +65,7 @@ contract QuoterPreviewTest is Test {
         uint256 deposit = 10e18;
         base.mint(user, deposit);
 
-        (uint256 qNeutron, uint256 qProton, uint256 qFee, uint256 qDev) = reactor.quoteFission(deposit);
+        (uint256 qNeutron, uint256 qProton,, uint256 qDev) = reactor.quoteFission(deposit);
 
         uint256 userNeutronBefore = reactor.NEUTRON_TOKEN().balanceOf(recipient);
         uint256 userProtonBefore = reactor.PROTON_TOKEN().balanceOf(recipient);
@@ -88,7 +88,7 @@ contract QuoterPreviewTest is Test {
     function testQuoteFusionMatchesActualExecution() public {
         uint256 grossWithdrawal = 5e18;
 
-        (uint256 qNeutronBurn, uint256 qProtonBurn, uint256 qNetOut, uint256 qFee, uint256 qDev) =
+        (uint256 qNeutronBurn, uint256 qProtonBurn, uint256 qNetOut,, uint256 qDev) =
             reactor.quoteFusion(grossWithdrawal);
 
         uint256 userBaseBefore = base.balanceOf(recipient);
@@ -113,8 +113,7 @@ contract QuoterPreviewTest is Test {
     function testQuoteTransmuteProtonToNeutronMatchesActualExecution() public {
         uint256 protonIn = 2e18;
 
-        (uint256 qNeutronOut, uint256 qFeeWad, uint256 qProtoFee, uint256 qDevFee) =
-            reactor.quoteTransmuteProtonToNeutron(protonIn);
+        (uint256 qNeutronOut, uint256 qFeeWad,, uint256 qDevFee) = reactor.quoteTransmuteProtonToNeutron(protonIn);
 
         assertGt(qNeutronOut, 0);
 
@@ -135,8 +134,7 @@ contract QuoterPreviewTest is Test {
     function testQuoteTransmuteNeutronToProtonMatchesActualExecution() public {
         uint256 neutronIn = 2e18;
 
-        (uint256 qProtonOut, uint256 qFeeWad, uint256 qProtoFee, uint256 qDevFee) =
-            reactor.quoteTransmuteNeutronToProton(neutronIn);
+        (uint256 qProtonOut, uint256 qFeeWad,, uint256 qDevFee) = reactor.quoteTransmuteNeutronToProton(neutronIn);
 
         assertGt(qProtonOut, 0);
 
@@ -268,7 +266,7 @@ contract QuoterPreviewTest is Test {
         uint256 receivedAmount = 45e18;
 
         // Quoting with the actual received amount accurately predicts the execution results
-        (uint256 qNeutron, uint256 qProton, uint256 qFee, uint256 qDev) = feeReactor.quoteFission(receivedAmount);
+        (uint256 qNeutron, uint256 qProton,, uint256 qDev) = feeReactor.quoteFission(receivedAmount);
 
         // Quoting with the raw inputAmount would overestimate outputs because the token has a transfer tax
         (uint256 naiveNeutron, uint256 naiveProton,,) = feeReactor.quoteFission(inputAmount);
@@ -331,7 +329,7 @@ contract QuoterPreviewTest is Test {
 
         // Verify that quoting matches execution when dev fee is transferred out
         uint256 tradeAmount = 10e18;
-        (uint256 quotedNeutron, uint256 quotedFeeWad, uint256 quotedProtoFee, uint256 quotedDevFee) =
+        (uint256 quotedNeutron, uint256 quotedFeeWad,, uint256 quotedDevFee) =
             highDevReactor.quoteTransmuteProtonToNeutron(tradeAmount);
 
         assertGt(quotedDevFee, 0, "dev fee should be positive");
