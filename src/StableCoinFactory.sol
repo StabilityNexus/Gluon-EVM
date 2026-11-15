@@ -41,9 +41,16 @@ contract StableCoinFactory {
     error InvalidDevFee();
     error InvalidInitialReserve();
 
+    function _revert(bytes4 selector) private pure {
+        assembly ("memory-safe") {
+            mstore(0, selector)
+            revert(0, 4)
+        }
+    }
+
     constructor(address devParam, uint256 devFeeParam) {
-        if (devParam == address(0)) revert InvalidDev();
-        if (devFeeParam >= ProtocolConstants.WAD) revert InvalidDevFee();
+        if (devParam == address(0)) _revert(InvalidDev.selector);
+        if (devFeeParam >= ProtocolConstants.WAD) _revert(InvalidDevFee.selector);
         dev = devParam;
         devFee = devFeeParam;
     }
@@ -71,9 +78,6 @@ contract StableCoinFactory {
         uint256 betaPhi1Param,
         uint256 decayPerSecondWadParam
     ) public returns (address reactorAddress) {
-        if (oracleParam == address(0)) revert InvalidOracle();
-        if (initialReserveParam == 0) revert InvalidInitialReserve();
-
         StableCoinReactor reactor = new StableCoinReactor(
             vaultNameParam,
             baseAssetNameParam,
@@ -102,9 +106,9 @@ contract StableCoinFactory {
         baseToken.safeTransferFrom(msg.sender, address(this), initialReserveParam);
 
         uint256 amountIn = baseToken.balanceOf(address(this)) - factoryBalanceBefore;
-        if (amountIn == 0) revert InvalidInitialReserve();
+        if (amountIn == 0) _revert(InvalidInitialReserve.selector);
 
-        baseToken.forceApprove(reactorAddress, amountIn);
+        baseToken.approve(reactorAddress, amountIn);
         reactor.initialFission(amountIn, initialReserveRatioWadParam);
 
         deployedReactors.push(reactorAddress);

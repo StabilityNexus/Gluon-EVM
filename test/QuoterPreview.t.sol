@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {StableCoinFactory} from "../src/StableCoinFactory.sol";
 import {StableCoinReactor} from "../src/StableCoin.sol";
 import {GenericMockOracle} from "./GenericIOracleIntegration.t.sol";
@@ -443,5 +444,68 @@ contract QuoterPreviewTest is Test {
         assertEq(actualMinusFeeWad, quotedMinusFeeWad, "Minus feeWad mismatch in 6 decimals");
         assertEq(reactor6.PROTON_TOKEN().balanceOf(recipient) - recipientProtonBefore, quotedProton);
         assertEq(base6.balanceOf(sixDev) - devBalBeforeMinus, quotedMinusDevFee, "Minus dev fee transfer mismatch");
+    }
+
+    function testFissionAuxPreservesPreTransferAdjustedBasePriceSafeguard() public {
+        MockPegChangingCallbackToken callbackToken = new MockPegChangingCallbackToken();
+        GenericMockOracle callbackOracle = new GenericMockOracle(WAD);
+
+        StableCoinReactor freshReactor = new StableCoinReactor(
+            "FreshVault",
+            "FreshBase",
+            "FB",
+            "NeutronToken",
+            "NT",
+            address(callbackToken),
+            address(callbackOracle),
+            "ProtonToken",
+            "PT",
+            dev,
+            1e15,
+            1e16,
+            1e16,
+            101e16,
+            5e15,
+            1e16,
+            99e16
+        );
+
+        callbackToken.setReactorTarget(address(freshReactor));
+        uint256 depositAmount = 10e18;
+        callbackToken.mint(address(this), depositAmount);
+        callbackToken.approve(address(freshReactor), depositAmount);
+
+        // Net amount after fees
+        uint256 expectedNet = depositAmount - Math.mulDiv(depositAmount, 1e16 + 1e15, WAD);
+        uint256 expectedNeutronOut = Math.mulDiv(expectedNet, WAD, 15e17);
+
+        // initialFission snapshots adjustedBasePrice before safeTransferFrom.
+        // During safeTransferFrom, callback changes pegFactor to 105 * 1e34 (5% increase).
+        freshReactor.initialFission(depositAmount, 15e17);
+
+        assertTrue(callbackToken.callbackTriggered());
+        assertEq(freshReactor.pegFactor(), 105 * 1e34);
+        assertEq(freshReactor.NEUTRON_TOKEN().balanceOf(address(freshReactor)), expectedNeutronOut);
+    }
+}
+
+contract MockPegChangingCallbackToken is MockDecimalERC20 {
+    Vm constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
+    address public reactorTarget;
+    bool public callbackTriggered;
+
+    constructor() MockDecimalERC20("PegCallback", "PCB", 18) {}
+
+    function setReactorTarget(address target) external {
+        reactorTarget = target;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        if (!callbackTriggered && reactorTarget != address(0) && to == reactorTarget) {
+            callbackTriggered = true;
+            // Slot 10 is pegFactor. Alter peg to 105 * 1e34 (5% increase) during the callback.
+            VM.store(reactorTarget, bytes32(uint256(10)), bytes32(uint256(105 * 1e34)));
+        }
+        return super.transferFrom(from, to, amount);
     }
 }
