@@ -375,12 +375,17 @@ contract StableCoinReactor is ReentrancyGuard {
         return q > WAD ? WAD : q;
     }
 
-    function _pricesInBase(uint256 basePrice) internal view returns (uint256 neutronPriceBase, uint256 protonPriceBase) {
+    function _pricesInBase(uint256 basePrice)
+        internal
+        view
+        returns (uint256 neutronPriceBase, uint256 protonPriceBase)
+    {
         uint256 normalizedReserve = _normalizedReserve();
         uint256 neutronSupply = NEUTRON_TOKEN.totalSupply();
         uint256 protonSupply = PROTON_TOKEN.totalSupply();
         neutronPriceBase = _neutronPriceInBase(normalizedReserve, neutronSupply, basePrice, Math.Rounding.Floor);
-        protonPriceBase = _protonPriceInBase(normalizedReserve, protonSupply, neutronSupply, basePrice, Math.Rounding.Floor);
+        protonPriceBase =
+            _protonPriceInBase(normalizedReserve, protonSupply, neutronSupply, basePrice, Math.Rounding.Floor);
     }
 
     function neutronPriceInBase() public view returns (uint256) {
