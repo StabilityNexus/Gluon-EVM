@@ -108,7 +108,7 @@ contract StableCoinFactory {
         uint256 amountIn = baseToken.balanceOf(address(this)) - factoryBalanceBefore;
         if (amountIn == 0) _revert(InvalidInitialReserve.selector);
 
-        baseToken.approve(reactorAddress, amountIn);
+        baseToken.forceApprove(reactorAddress, amountIn);
         reactor.initialFission(amountIn, initialReserveRatioWadParam);
 
         deployedReactors.push(reactorAddress);
