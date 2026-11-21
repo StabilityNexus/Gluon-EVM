@@ -61,7 +61,7 @@ contract GenericIOracleIntegrationTest is Test {
     uint256 internal constant INITIAL_RESERVE = 100e18;
 
     function setUp() public {
-        factory = new StableCoinFactory(dev, 0);
+        factory = new StableCoinFactory(dev, 0, 365 days);
         baseToken = new GenericMockERC20();
     }
 

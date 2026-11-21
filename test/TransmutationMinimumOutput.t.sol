@@ -24,7 +24,7 @@ contract TransmutationMinimumOutputTest is Test {
     function _deploy(uint8 decimals) private {
         base = new MockDecimalERC20("Base", "B", decimals);
         oracle = new GenericMockOracle(WAD);
-        StableCoinFactory factory = new StableCoinFactory(dev, 1e15);
+        StableCoinFactory factory = new StableCoinFactory(dev, 1e15, 365 days);
         uint256 deposit = 100 * 10 ** uint256(decimals);
         base.mint(address(this), deposit);
         base.approve(address(factory), deposit);

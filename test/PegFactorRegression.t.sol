@@ -14,7 +14,7 @@ contract PegFactorRegressionTest is Test {
     address private dev = makeAddr("peg regression dev");
 
     function setUp() public {
-        factory = new StableCoinFactory(dev, 0);
+        factory = new StableCoinFactory(dev, 0, 365 days);
         base = new GenericMockERC20();
     }
 

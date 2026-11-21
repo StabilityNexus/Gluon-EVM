@@ -33,7 +33,7 @@ contract UnsignedVolumeLedgerTest is Test {
     address private user = makeAddr("volume user");
 
     function setUp() public {
-        factory = new StableCoinFactory(address(1), 0);
+        factory = new StableCoinFactory(address(1), 0, 365 days);
         base = new GenericMockERC20();
         oracle = new GenericMockOracle(WAD);
         reactor = _deploy(1, WAD, WAD, 100e18);

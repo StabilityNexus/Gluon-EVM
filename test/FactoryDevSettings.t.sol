@@ -46,7 +46,7 @@ contract FactoryDevSettingsTest is Test {
     function testFuzzPublicCreatorUsesFactorySettings(address creator, uint64 rate) public {
         vm.assume(creator != address(0) && creator != dev && creator != address(base));
         uint256 fee = bound(uint256(rate), 0, 1e18 - 1);
-        StableCoinFactory factory = new StableCoinFactory(dev, fee);
+        StableCoinFactory factory = new StableCoinFactory(dev, fee, 365 days);
         vm.assume(creator != address(factory));
         StableCoinReactor reactor = _create(factory, creator);
         assertEq(reactor.dev(), dev);
@@ -59,7 +59,7 @@ contract FactoryDevSettingsTest is Test {
     }
 
     function testReactorDevChangesDoNotChangeFactoryOrLaterReactors() public {
-        StableCoinFactory factory = new StableCoinFactory(dev, 1e15);
+        StableCoinFactory factory = new StableCoinFactory(dev, 1e15, 365 days);
         StableCoinReactor first = _create(factory, address(this));
         address nextDev = makeAddr("next dev");
         vm.prank(dev);
