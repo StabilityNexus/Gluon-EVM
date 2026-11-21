@@ -56,6 +56,9 @@ contract StableCoinReactor is ReentrancyGuard {
     error PegAdjustmentNotNeeded();
     error ReserveRatioOutOfRange(uint256 reserveRatio);
     error ResultingReserveRatioBelowCritical();
+    error InvalidMaxStaleness();
+    error StalenessAlreadyConfigured();
+    error OraclePriceStale(uint256 updatedAt, uint256 maxStaleness);
 
     // Tokens
     Tokeon public immutable NEUTRON_TOKEN; // stable token (peg)
@@ -72,6 +75,8 @@ contract StableCoinReactor is ReentrancyGuard {
 
     // Oracle
     IOracle public immutable ORACLE;
+    uint256 public MAX_STALENESS;
+    bool private stalenessConfigured;
     uint256 public lastSuccessfulBasePrice;
 
     address public immutable FACTORY;
@@ -197,6 +202,7 @@ contract StableCoinReactor is ReentrancyGuard {
 
         BASE_TOKEN = IERC20(baseTokenParam);
         ORACLE = IOracle(oracleParam);
+        MAX_STALENESS = 365 days;
         CRITICAL_RESERVE_RATIO = criticalReserveRatioWadParam;
 
         FACTORY = msg.sender;
@@ -214,6 +220,15 @@ contract StableCoinReactor is ReentrancyGuard {
         betaPhi1 = betaPhi1Param;
         decayPerSecondWad = decayPerSecondWadParam;
         lastDecayTs = block.timestamp;
+    }
+
+    /// @dev The factory fixes this once at deployment; the value cannot be changed afterwards.
+    function configureStaleness(uint256 maxStaleness) external {
+        if (msg.sender != FACTORY) revert OnlyFactory();
+        if (maxStaleness == 0) revert InvalidMaxStaleness();
+        if (stalenessConfigured) revert StalenessAlreadyConfigured();
+        MAX_STALENESS = maxStaleness;
+        stalenessConfigured = true;
     }
 
     function proposeDev(address newDev) external {
@@ -288,15 +303,24 @@ contract StableCoinReactor is ReentrancyGuard {
     /// reverts. The write survives only if the calling operation completes. A zero price is
     /// returned as read but never cached: adjustPeg() and the transmutations return normally at a
     /// zero price, so caching it would persist and leave no usable fallback if the oracle then
-    /// starts reverting.
+    /// starts reverting. Stale prices are never used or cached: consumers decide how old a price
+    /// may be, and this reactor reverts when the oracle's timestamp is older than MAX_STALENESS.
     function _readAndCacheBasePrice() internal returns (uint256) {
         try ORACLE.readValue() returns (uint256 basePrice) {
+            _requireFreshOraclePrice();
             if (basePrice != 0) {
                 lastSuccessfulBasePrice = basePrice;
             }
             return basePrice;
         } catch {
             return lastSuccessfulBasePrice;
+        }
+    }
+
+    function _requireFreshOraclePrice() internal view {
+        uint256 updatedAt = ORACLE.lastUpdated();
+        if (updatedAt > block.timestamp || block.timestamp - updatedAt > MAX_STALENESS) {
+            revert OraclePriceStale(updatedAt, MAX_STALENESS);
         }
     }
 

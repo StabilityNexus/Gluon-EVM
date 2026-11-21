@@ -129,7 +129,7 @@ contract GluonIntegrationTest is Test {
         mockFeed = new MockFeed(100000000, 8);
         adapter = new ChainlinkToOracleAdapter(address(mockFeed));
 
-        factory = new StableCoinFactory(dev, 0);
+        factory = new StableCoinFactory(dev, 0, 365 days);
 
         reactor = _deployReactor(address(adapter));
     }
@@ -193,7 +193,7 @@ contract GluonIntegrationTest is Test {
         returns (MockDecimalERC20 decimalToken, StableCoinReactor decimalReactor)
     {
         decimalToken = new MockDecimalERC20("USD Coin", "USDC", decimals_);
-        StableCoinFactory decimalFactory = new StableCoinFactory(dev, 0);
+        StableCoinFactory decimalFactory = new StableCoinFactory(dev, 0, 365 days);
 
         decimalToken.mint(address(this), initialReserve);
         decimalToken.approve(address(decimalFactory), initialReserve);
@@ -226,7 +226,7 @@ contract GluonIntegrationTest is Test {
         returns (MockDecimalERC20 decimalToken, StableCoinReactor decimalReactor)
     {
         decimalToken = new MockDecimalERC20("USD Coin", "USDC", decimals_);
-        StableCoinFactory decimalFactory = new StableCoinFactory(dev, 0);
+        StableCoinFactory decimalFactory = new StableCoinFactory(dev, 0, 365 days);
 
         decimalToken.mint(address(this), initialReserve);
         decimalToken.approve(address(decimalFactory), initialReserve);
@@ -681,7 +681,7 @@ contract GluonIntegrationTest is Test {
     function testDeploymentRejectsReserveTokenAboveWadPrecision() public {
         MockDecimalERC20 highDecimalToken = new MockDecimalERC20("High Decimal Token", "HDT", 19);
 
-        StableCoinFactory highDecimalFactory = new StableCoinFactory(dev, 0);
+        StableCoinFactory highDecimalFactory = new StableCoinFactory(dev, 0, 365 days);
 
         uint256 initialReserve = 100e19;
         highDecimalToken.mint(address(this), initialReserve);

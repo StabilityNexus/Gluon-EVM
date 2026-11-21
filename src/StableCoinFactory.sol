@@ -51,12 +51,17 @@ contract StableCoinFactory {
     error InvalidFusionFee();
     error InvalidCriticalReserveRatio();
     error InvalidInitialReserve();
+    error InvalidMaxStaleness();
 
-    constructor(address devParam, uint256 devFeeParam) {
+    uint256 public immutable MAX_STALENESS;
+
+    constructor(address devParam, uint256 devFeeParam, uint256 maxStalenessParam) {
         if (devParam == address(0)) revert InvalidDev();
         if (devFeeParam >= ProtocolConstants.WAD) revert InvalidDevFee();
+        if (maxStalenessParam == 0) revert InvalidMaxStaleness();
         dev = devParam;
         devFee = devFeeParam;
+        MAX_STALENESS = maxStalenessParam;
     }
 
     /**
@@ -115,6 +120,8 @@ contract StableCoinFactory {
             betaPhi1Param,
             decayPerSecondWadParam
         );
+
+        reactor.configureStaleness(MAX_STALENESS);
 
         address reactorAddress = address(reactor);
 

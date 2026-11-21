@@ -14,7 +14,7 @@ contract ImmutableBetaTest is Test {
     address internal user = makeAddr("user");
 
     function setUp() public {
-        factory = new StableCoinFactory(dev, 0);
+        factory = new StableCoinFactory(dev, 0, 365 days);
         baseToken = new GenericMockERC20();
         oracle = new GenericMockOracle(1e18);
     }

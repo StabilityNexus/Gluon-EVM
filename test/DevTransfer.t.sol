@@ -33,7 +33,7 @@ contract DevTransferTest is Test {
     event DevFeeReceiverChanged(address indexed previousReceiver, address indexed newReceiver);
 
     function setUp() public {
-        factory = new StableCoinFactory(INITIAL_DEV, 1e15);
+        factory = new StableCoinFactory(INITIAL_DEV, 1e15, 365 days);
         base = new GenericMockERC20();
         oracle = new GenericMockOracle(WAD);
         reactor = _deploy();
@@ -90,7 +90,7 @@ contract DevTransferTest is Test {
 
     function testFactoryRejectsZeroDev() public {
         vm.expectRevert(StableCoinFactory.InvalidDev.selector);
-        new StableCoinFactory(address(0), 1e15);
+        new StableCoinFactory(address(0), 1e15, 365 days);
         assertEq(factory.getDeployedReactorsCount(), 1);
     }
 

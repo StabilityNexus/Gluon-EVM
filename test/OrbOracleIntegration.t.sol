@@ -27,7 +27,7 @@ contract OrbOracleIntegrationTest is Test {
     address internal dev = makeAddr("dev");
 
     function setUp() public {
-        factory = new StableCoinFactory(dev, 0);
+        factory = new StableCoinFactory(dev, 0, 365 days);
 
         baseToken = new MockERC20("USD Coin", "USDC");
         weightToken = new MockERC20("Orb Weight Token", "ORB");

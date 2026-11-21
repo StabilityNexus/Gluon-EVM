@@ -59,7 +59,7 @@ contract DevFeeAccountingTest is Test {
         returns (MockDecimalERC20 base, StableCoinReactor reactor)
     {
         base = new MockDecimalERC20("Base", "B", decimals_);
-        StableCoinFactory factory = new StableCoinFactory(dev, devRate);
+        StableCoinFactory factory = new StableCoinFactory(dev, devRate, 365 days);
         GenericMockOracle oracle = new GenericMockOracle(WAD);
         uint256 seed = 100 * 10 ** uint256(decimals_);
         base.mint(address(this), seed);
@@ -322,6 +322,6 @@ contract DevFeeAccountingTest is Test {
 
     function testRejectsDevFeeAtOneHundredPercent() public {
         vm.expectRevert(StableCoinFactory.InvalidDevFee.selector);
-        new StableCoinFactory(dev, WAD);
+        new StableCoinFactory(dev, WAD, 365 days);
     }
 }
