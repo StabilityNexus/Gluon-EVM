@@ -97,6 +97,12 @@ contract UnsignedVolumeLedgerTest is Test {
         assertEq(minus, expectedMinus);
     }
 
+    /// Reference beta fee for phi0 = 1 and phi1 = WAD. The net volume includes the trade being
+    /// charged (Gluon.es OUT_VOLUME_*, Coq net_volume). Read before the trade.
+    function _expectedFee(uint256 netVolume) private view returns (uint256) {
+        return 1 + Math.mulDiv(WAD, netVolume, reactor.reserve(), Math.Rounding.Ceil);
+    }
+
     function testOppositeTradesKeepSeparateCountersAndCancelForFees() public {
         vm.startPrank(user);
         reactor.transmuteProtonToNeutron(WAD, 0, user);
@@ -105,9 +111,11 @@ contract UnsignedVolumeLedgerTest is Test {
         vm.stopPrank();
         assertEq(minusFee, 1, "opposite direction should pay only the base fee");
         _assertVolumes(MINUS, WAD, WAD);
+        // The earlier equal volumes cancel, so the next beta+ pays only for itself.
+        uint256 expected = _expectedFee(Math.mulDiv(WAD, reactor.protonPriceInBase(), WAD));
         vm.prank(user);
         (, uint256 plusFee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
-        assertEq(plusFee, 1, "equal directional volumes must cancel for fees");
+        assertEq(plusFee, expected, "equal directional volumes must cancel for fees");
     }
 
     function testFeeUsesOnlyPositiveDifferenceInItsOwnDirection() public {
@@ -117,7 +125,8 @@ contract UnsignedVolumeLedgerTest is Test {
         (, uint256 minusFee) = reactor.transmuteNeutronToProton(WAD, 0, user);
         (, uint256 plusFee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.stopPrank();
-        assertEq(minusFee, 1 + WAD / 200);
+        // Net beta- volume including this trade: 2 + 1 - 1 WAD.
+        assertEq(minusFee, _expectedFee(2 * WAD));
         assertEq(plusFee, 1);
     }
 
@@ -128,10 +137,12 @@ contract UnsignedVolumeLedgerTest is Test {
         reactor.transmuteNeutronToProton(2 * WAD, 0, user);
         vm.warp(block.timestamp + 1);
         uint256 gross = Math.mulDiv(WAD, reactor.protonPriceInBase(), WAD);
+        // Decayed counters 2 WAD and 1 WAD, plus this trade.
+        uint256 expected = _expectedFee(WAD + gross);
         vm.recordLogs();
         (, uint256 fee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.stopPrank();
-        assertEq(fee, 1 + WAD / 200);
+        assertEq(fee, expected);
         _assertVolumes(PLUS, 2 * WAD + gross, WAD);
     }
 
@@ -155,10 +166,12 @@ contract UnsignedVolumeLedgerTest is Test {
         reactor.transmuteNeutronToProton(2 * WAD, 0, user);
         vm.warp(block.timestamp + 1);
         uint256 gross = Math.mulDiv(WAD, reactor.protonPriceInBase(), WAD);
+        // Both counters are cleared, so only this trade counts.
+        uint256 expected = _expectedFee(gross);
         vm.recordLogs();
         (, uint256 fee) = reactor.transmuteProtonToNeutron(WAD, 0, user);
         vm.stopPrank();
-        assertEq(fee, 1);
+        assertEq(fee, expected);
         _assertVolumes(PLUS, gross, 0);
     }
 

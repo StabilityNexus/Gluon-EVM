@@ -164,8 +164,10 @@ the shared `IOracle` interface and does not depend on Chainlink round metadata.
 
 Volume-dependent beta decay fees should always be enabled; an increase in a direction's recorded
 volume can raise its transmutation fee, counteracting trading against a mispriced
-oracle. This is a mitigation, not a guarantee of accurate pricing: opposing trades
-and decay also affect the volume ledger.
+oracle. The volume used for a fee includes the transmutation being charged, as in the
+Gluon paper's Coq model and the Ergo contract, so a single large trade on a quiet ledger
+pays the volume part too. This is a mitigation, not a guarantee of accurate pricing:
+opposing trades and decay also affect the volume ledger.
 Freshness timeouts should not be added as a routine oracle bug fix.
 
 ---
