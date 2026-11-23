@@ -390,7 +390,7 @@ contract StableCoinReactor is ReentrancyGuard {
         return _reserveRatioWad(normalizedReserve, neutronSupplyTotal, getBasePriceInPeggedAsset());
     }
 
-    function adjustPeg() external {
+    function adjustPeg() external nonReentrant {
         uint256 normalizedReserve = _normalizedReserve();
         uint256 neutronSupplyTotal = NEUTRON_TOKEN.totalSupply();
 
