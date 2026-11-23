@@ -277,11 +277,18 @@ contract StableCoinReactor is ReentrancyGuard {
     /// @dev Base/PeggedAsset price (WAD), falling back to the cached price when the oracle reverts.
     /// A view cannot persist a price, so only _readAndCacheBasePrice() refreshes the cache.
     function getBasePriceInPeggedAsset() public view returns (uint256) {
-        try ORACLE.readValue() returns (uint256 basePrice) {
-            return basePrice;
-        } catch {
-            return lastSuccessfulBasePrice;
-        }
+        (bool ok, uint256 basePrice) = _readOracle();
+        return ok ? basePrice : lastSuccessfulBasePrice;
+    }
+
+    /// @dev A revert, or a successful call that returns fewer than 32 bytes, is a failed read.
+    /// `try ORACLE.readValue() returns (...)` cannot catch the second case: the decode would
+    /// revert in this contract and take the whole operation with it.
+    function _readOracle() internal view returns (bool ok, uint256 basePrice) {
+        bytes memory data;
+        (ok, data) = address(ORACLE).staticcall(abi.encodeCall(IOracle.readValue, ()));
+        ok = ok && data.length >= 32;
+        if (ok) basePrice = abi.decode(data, (uint256));
     }
 
     /// @dev Same read, but persists the price so the reactor keeps operating if the oracle later
@@ -290,14 +297,12 @@ contract StableCoinReactor is ReentrancyGuard {
     /// zero price, so caching it would persist and leave no usable fallback if the oracle then
     /// starts reverting.
     function _readAndCacheBasePrice() internal returns (uint256) {
-        try ORACLE.readValue() returns (uint256 basePrice) {
-            if (basePrice != 0) {
-                lastSuccessfulBasePrice = basePrice;
-            }
-            return basePrice;
-        } catch {
-            return lastSuccessfulBasePrice;
+        (bool ok, uint256 basePrice) = _readOracle();
+        if (!ok) return lastSuccessfulBasePrice;
+        if (basePrice != 0) {
+            lastSuccessfulBasePrice = basePrice;
         }
+        return basePrice;
     }
 
     function _normalizedTargetPriceInBase(uint256 basePrice, Math.Rounding rounding) internal view returns (uint256) {
