@@ -56,6 +56,7 @@ contract StableCoinReactor is ReentrancyGuard {
     error PegAdjustmentNotNeeded();
     error ReserveRatioOutOfRange(uint256 reserveRatio);
     error ResultingReserveRatioBelowCritical();
+    error ResultingReserveRatioAboveUpper();
 
     // Tokens
     Tokeon public immutable NEUTRON_TOKEN; // stable token (peg)
@@ -403,7 +404,19 @@ contract StableCoinReactor is ReentrancyGuard {
         if (reserveRatio < CRITICAL_RESERVE_RATIO) {
             pegFactor = Math.max(1, Math.mulDiv(previousPegFactor, PEG_DOWN_FACTOR_WAD, WAD));
         } else if (reserveRatio > UPPER_RESERVE_RATIO) {
+            // At most 1%, and never past the 200% bound (rounded down), so a step is always paid for by
+            // excess reserve. reserveRatio is a lower bound, so + 1 lets a fully paid unit through.
+            // At or above 400% the bound is at least twice the peg and cannot bind.
             pegFactor = Math.mulDiv(previousPegFactor, PEG_UP_FACTOR_WAD, WAD, Math.Rounding.Ceil);
+            if (reserveRatio < 2 * UPPER_RESERVE_RATIO) {
+                unchecked {
+                    // reserveRatio < 4e18 here, so + 1 cannot overflow.
+                    pegFactor = Math.min(
+                        pegFactor,
+                        Math.mulDiv(previousPegFactor, reserveRatio + 1, UPPER_RESERVE_RATIO, Math.Rounding.Floor)
+                    );
+                }
+            }
         } else {
             revert PegAdjustmentNotNeeded();
         }
@@ -662,6 +675,16 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 newVolume = decayedVolumeMinusBase + grossBase;
 
         NEUTRON_TOKEN.burn(msg.sender, neutronIn);
+        // A self-made ratio above 200% would let adjustPeg() move Proton equity to Neutron holders.
+        // The reserve before the dev fee is used, so the check holds whether or not that fee is paid.
+        uint256 resultingNeutronSupply;
+        unchecked {
+            // The burn above guarantees neutronIn <= neutronSupplyCached.
+            resultingNeutronSupply = neutronSupplyCached - neutronIn;
+        }
+        if (_reserveRatioWad(normalizedReserve, resultingNeutronSupply, basePrice) > UPPER_RESERVE_RATIO) {
+            revert ResultingReserveRatioAboveUpper();
+        }
         PROTON_TOKEN.mint(to, protonOut);
         decayedVolumeMinusBase = newVolume;
         if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);

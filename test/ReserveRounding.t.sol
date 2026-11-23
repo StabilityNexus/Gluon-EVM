@@ -248,6 +248,13 @@ contract ReserveRoundingTest is Test {
         assertLe(high - low, 1);
     }
 
+    // Largest beta-minus that keeps the ratio at or below 200%, from an upper bound on the ratio.
+    function _maxBetaMinus() private view returns (uint256) {
+        uint256 supply = reactor.NEUTRON_TOKEN().totalSupply();
+        uint256 keep = Math.mulDiv(reactor.reserveRatioPeggedAsset() + 1, supply, 2e18, Math.Rounding.Ceil);
+        return keep >= supply ? 0 : supply - keep;
+    }
+
     function _assertTradeValue(uint256 input, bool plus) private {
         uint256 r = reactor.reserve() * WAD / unit;
         uint256 n = reactor.NEUTRON_TOKEN().totalSupply();
@@ -292,7 +299,9 @@ contract ReserveRoundingTest is Test {
         uint8 decimals_
     ) public {
         _deploy(decimals_ % 19, (uint256(multiplier % 30) + 1) * 10 ** uint256(exponent % 41), 0, 0);
-        _assertTradeValue(bound(inputRaw, 1, Math.min(WAD, reactor.NEUTRON_TOKEN().balanceOf(user))), false);
+        uint256 cap = Math.min(Math.min(WAD, reactor.NEUTRON_TOKEN().balanceOf(user)), _maxBetaMinus());
+        vm.assume(cap != 0);
+        _assertTradeValue(bound(inputRaw, 1, cap), false);
     }
 
     function testFuzzTransmutationDevFeeIsIncludedInValueConservation(uint96 inputRaw, bool plus) public {
@@ -335,7 +344,9 @@ contract ReserveRoundingTest is Test {
         _deploy(18, 7e17, 1e16, 1e15);
         oracle.setValue(14e17);
         _recover();
-        _assertTradeValue(bound(inputRaw, 1, WAD), plus);
+        uint256 cap = plus ? WAD : Math.min(WAD, _maxBetaMinus());
+        vm.assume(cap != 0);
+        _assertTradeValue(bound(inputRaw, 1, cap), plus);
     }
 
     function testEverySupportedDecimalCountSupportsReserveSafeFusion() public {

@@ -140,7 +140,12 @@ Oracle values are expected in **WAD format**, meaning 18 decimals.
 The reactor's dimensionless `pegFactor` uses 36 decimals, with `1e36` representing
 one. `adjustPeg()` applies 1% step coefficients when the reserve ratio is outside its
 operating range. Downward adjustments keep it positive; upward adjustments round
-up to preserve progress. Prices, fees and reserve accounting remain WAD-scaled.
+up to preserve progress, but never past the 200% bound, which rounds down. So an
+upward step never moves the peg further than the excess reserve pays for. At a
+very small peg factor, an excess worth less than one unit cannot move it, and
+operations wait until the price changes or the excess reserve grows enough to pay
+for the next unit. Prices, fees and reserve accounting
+remain WAD-scaled.
 
 The `ChainlinkToOracleAdapter`:
 
@@ -617,7 +622,10 @@ This follows the separation of `f` and `fT` in
 Fission and fusion use native reserve-token units. Beta reactions calculate fees
 on their WAD-normalized gross base value; the dev payment is converted down to
 native reserve-token units. Any conversion dust stays in the reserve. Beta-plus
-checks the resulting reserve ratio after the dev payment. A combined fee of 100%
+checks the resulting reserve ratio after the dev payment. Beta-minus reverts if
+its resulting reserve ratio would be above 200%, measured with the reserve before
+the dev payment, so a holder cannot push the ratio out of range and then use
+`adjustPeg()` to move Proton equity to Neutrons. A combined fee of 100%
 can produce zero output when the minimum is zero. Combined rates above 100%
 revert without paying a fee.
 
