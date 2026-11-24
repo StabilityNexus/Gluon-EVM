@@ -344,8 +344,11 @@ contract ReserveRoundingTest is Test {
         _deploy(18, 7e17, 1e16, 1e15);
         oracle.setValue(14e17);
         _recover();
+        // Recovery leaves the ratio at the 200% bound, where beta-minus has no room. A lower price
+        // keeps the adjusted peg and gives both directions a real trade size.
+        oracle.setValue(12e17);
         uint256 cap = plus ? WAD : Math.min(WAD, _maxBetaMinus());
-        vm.assume(cap != 0);
+        assertGt(cap, 1e15, "beta-minus needs headroom after recovery");
         _assertTradeValue(bound(inputRaw, 1, cap), plus);
     }
 

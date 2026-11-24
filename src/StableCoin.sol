@@ -407,7 +407,9 @@ contract StableCoinReactor is ReentrancyGuard {
             // At most 1%, and never past the 200% bound (rounded down), so a step is always paid for by
             // excess reserve. reserveRatio is a lower bound, so + 1 lets a fully paid unit through.
             // At or above 400% the bound is at least twice the peg and cannot bind.
-            pegFactor = Math.mulDiv(previousPegFactor, PEG_UP_FACTOR_WAD, WAD, Math.Rounding.Ceil);
+            // p + ceil(p / 100) == ceil(p * 1.01), with the same overflow revert, and avoids a mulDiv.
+            // It relies on (PEG_UP_FACTOR_WAD - WAD) dividing WAD exactly.
+            pegFactor = previousPegFactor + Math.ceilDiv(previousPegFactor, WAD / (PEG_UP_FACTOR_WAD - WAD));
             if (reserveRatio < 2 * UPPER_RESERVE_RATIO) {
                 unchecked {
                     // reserveRatio < 4e18 here, so + 1 cannot overflow.
@@ -459,7 +461,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 received = reserve() - reserveBaseline;
 
         (uint256 netAmount, uint256 fee, uint256 devFeeAmount) = _deductFees(received, FISSION_FEE);
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
+        _payDevFee(devFeeAmount);
 
         // Accounting boundary. Every reserve amount below is in the protocol representation;
         // The event reports received funds, retained protocol fees and dev fees in native units.
@@ -507,8 +509,12 @@ contract StableCoinReactor is ReentrancyGuard {
         (uint256 net, uint256 fee, uint256 devFeeAmount) = _deductFees(m, FUSION_FEE);
 
         BASE_TOKEN.safeTransfer(to, net);
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
+        _payDevFee(devFeeAmount);
         emit Fusion(msg.sender, to, nBurn, pBurn, net, fee, devFeeAmount);
+    }
+
+    function _payDevFee(uint256 devFeeAmount) internal {
+        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
     }
 
     // Both fees use the same gross amount. The protocol fee stays in the reserve.
@@ -608,7 +614,7 @@ contract StableCoinReactor is ReentrancyGuard {
         neutronOut = Math.mulDiv(netBase, WAD, neutronPriceBase);
         if (neutronOut < minNeutronOut) revert ExcessiveSlippage();
 
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
+        _payDevFee(devFeeAmount);
         uint256 resultingNeutronSupply = neutronSupplyCached + neutronOut;
         uint256 resultingReserveRatio = _reserveRatioWad(_normalizedReserve(), resultingNeutronSupply, basePrice);
         if (resultingReserveRatio < CRITICAL_RESERVE_RATIO) {
@@ -659,6 +665,16 @@ contract StableCoinReactor is ReentrancyGuard {
             return (0, 0);
         }
 
+        // A self-made ratio above 200% would let adjustPeg() move Proton equity to Neutron holders.
+        // The reserve before the dev fee is used, so the check holds whether or not that fee is paid.
+        // Unchecked: if neutronIn exceeds the supply, the wrapped value passes here and the burn
+        // below reverts, as it would without this check.
+        unchecked {
+            if (_reserveRatioWad(normalizedReserve, neutronSupplyCached - neutronIn, basePrice) > UPPER_RESERVE_RATIO) {
+                revert ResultingReserveRatioAboveUpper();
+            }
+        }
+
         protonPriceBase = _protonPriceInBase(
             normalizedReserve, protonSupplyCached, neutronSupplyCached, basePrice, Math.Rounding.Ceil
         );
@@ -675,19 +691,9 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 newVolume = decayedVolumeMinusBase + grossBase;
 
         NEUTRON_TOKEN.burn(msg.sender, neutronIn);
-        // A self-made ratio above 200% would let adjustPeg() move Proton equity to Neutron holders.
-        // The reserve before the dev fee is used, so the check holds whether or not that fee is paid.
-        uint256 resultingNeutronSupply;
-        unchecked {
-            // The burn above guarantees neutronIn <= neutronSupplyCached.
-            resultingNeutronSupply = neutronSupplyCached - neutronIn;
-        }
-        if (_reserveRatioWad(normalizedReserve, resultingNeutronSupply, basePrice) > UPPER_RESERVE_RATIO) {
-            revert ResultingReserveRatioAboveUpper();
-        }
         PROTON_TOKEN.mint(to, protonOut);
         decayedVolumeMinusBase = newVolume;
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
+        _payDevFee(devFeeAmount);
 
         emit TransmuteMinus(
             msg.sender, to, neutronIn, protonOut, feeWad, decayedVolumePlusBase, newVolume, devFeeAmount
