@@ -537,15 +537,15 @@ contract StableCoinReactor is ReentrancyGuard {
         lastDecayTs = t;
     }
 
-    function _betaPlusFeeWad(uint256 normalizedReserve) internal view returns (uint256) {
-        uint256 volume =
-            decayedVolumePlusBase > decayedVolumeMinusBase ? decayedVolumePlusBase - decayedVolumeMinusBase : 0;
+    // The volume includes the trade being charged, as in Gluon.es (OUT_VOLUME_PLUS and
+    // OUT_VOLUME_MINUS) and the Coq model (net_volume).
+    function _betaPlusFeeWad(uint256 normalizedReserve, uint256 newVolumePlus) internal view returns (uint256) {
+        uint256 volume = newVolumePlus > decayedVolumeMinusBase ? newVolumePlus - decayedVolumeMinusBase : 0;
         return _betaFeeWad(normalizedReserve, volume);
     }
 
-    function _betaMinusFeeWad(uint256 normalizedReserve) internal view returns (uint256) {
-        uint256 volume =
-            decayedVolumeMinusBase > decayedVolumePlusBase ? decayedVolumeMinusBase - decayedVolumePlusBase : 0;
+    function _betaMinusFeeWad(uint256 normalizedReserve, uint256 newVolumeMinus) internal view returns (uint256) {
+        uint256 volume = newVolumeMinus > decayedVolumePlusBase ? newVolumeMinus - decayedVolumePlusBase : 0;
         return _betaFeeWad(normalizedReserve, volume);
     }
 
@@ -588,7 +588,8 @@ contract StableCoinReactor is ReentrancyGuard {
         neutronPriceBase = _neutronPriceInBase(normalizedReserve, neutronSupplyCached, basePrice, Math.Rounding.Ceil);
         uint256 grossBase = Math.mulDiv(protonIn, protonPriceBase, WAD);
         _decayLedger();
-        feeWad = _betaPlusFeeWad(normalizedReserve);
+        uint256 newVolume = decayedVolumePlusBase + grossBase;
+        feeWad = _betaPlusFeeWad(normalizedReserve, newVolume);
         (uint256 netBase,, uint256 devFeeBaseWad) = _deductFees(grossBase, feeWad);
         uint256 devFeeAmount = Math.mulDiv(devFeeBaseWad, BASE_TOKEN_UNIT, WAD);
 
@@ -601,8 +602,6 @@ contract StableCoinReactor is ReentrancyGuard {
         if (resultingReserveRatio < CRITICAL_RESERVE_RATIO) {
             revert ResultingReserveRatioBelowCritical();
         }
-
-        uint256 newVolume = decayedVolumePlusBase + grossBase;
 
         PROTON_TOKEN.burn(msg.sender, protonIn);
         NEUTRON_TOKEN.mint(to, neutronOut);
@@ -652,14 +651,13 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 grossBase = Math.mulDiv(neutronIn, neutronPriceBase, WAD);
 
         _decayLedger();
-        feeWad = _betaMinusFeeWad(normalizedReserve);
+        uint256 newVolume = decayedVolumeMinusBase + grossBase;
+        feeWad = _betaMinusFeeWad(normalizedReserve, newVolume);
         (uint256 netBase,, uint256 devFeeBaseWad) = _deductFees(grossBase, feeWad);
         uint256 devFeeAmount = Math.mulDiv(devFeeBaseWad, BASE_TOKEN_UNIT, WAD);
 
         protonOut = Math.mulDiv(netBase, WAD, protonPriceBase);
         if (protonOut < minProtonOut) revert ExcessiveSlippage();
-
-        uint256 newVolume = decayedVolumeMinusBase + grossBase;
 
         NEUTRON_TOKEN.burn(msg.sender, neutronIn);
         PROTON_TOKEN.mint(to, protonOut);

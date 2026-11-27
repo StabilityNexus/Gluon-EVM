@@ -441,7 +441,7 @@ contract GluonIntegrationTest is Test {
         vm.prank(user6);
         (uint256 firstOut6, uint256 firstFee6) = sixDecimalReactor.transmuteProtonToNeutron(1e18, 0, user6);
 
-        assertEq(firstFee18, 0, "first beta+ fee should start at zero");
+        assertGt(firstFee18, 0, "first beta+ fee should count its own volume");
         assertEq(firstFee6, firstFee18, "first beta+ fee should match");
         assertEq(firstOut6, firstOut18, "first beta+ output should match");
 

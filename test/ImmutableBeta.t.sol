@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {StableCoinFactory} from "../src/StableCoinFactory.sol";
 import {StableCoinReactor} from "../src/StableCoin.sol";
 import {GenericMockERC20, GenericMockOracle} from "./GenericIOracleIntegration.t.sol";
@@ -100,19 +101,35 @@ contract ImmutableBetaTest is Test {
         _fund(retained);
         _fund(decayed);
 
+        uint256 firstRetained = _gross(retained);
+        uint256 firstDecayed = _gross(decayed);
         vm.startPrank(user);
         retained.transmuteProtonToNeutron(1e18, 0, user);
         decayed.transmuteProtonToNeutron(1e18, 0, user);
         vm.stopPrank();
         vm.warp(block.timestamp + 1);
+        // The fee counts the earlier volume, decayed or not, plus the trade being charged.
+        uint256 expectedRetained = _volumeFee(retained, firstRetained + _gross(retained));
+        uint256 expectedDecayed = _volumeFee(decayed, firstDecayed / 2 + _gross(decayed));
         vm.startPrank(user);
         (, uint256 retainedFee) = retained.transmuteProtonToNeutron(1e18, 0, user);
         (, uint256 decayedFee) = decayed.transmuteProtonToNeutron(1e18, 0, user);
         vm.stopPrank();
 
-        assertGt(retainedFee, 0);
-        assertEq(decayedFee, retainedFee / 2);
+        assertEq(retainedFee, expectedRetained);
+        assertEq(decayedFee, expectedDecayed);
+        assertLt(decayedFee, retainedFee);
         assertEq(decayed.decayPerSecondWad(), 5e17);
+    }
+
+    /// Base value of a 1e18 Proton beta+ at the reactor's current price (18-decimal base token).
+    function _gross(StableCoinReactor reactor) internal view returns (uint256) {
+        return Math.mulDiv(1e18, reactor.protonPriceInBase(), 1e18);
+    }
+
+    /// Volume part of the beta fee for phi0 = 0 and phi1 = 0.5.
+    function _volumeFee(StableCoinReactor reactor, uint256 volume) internal view returns (uint256) {
+        return Math.mulDiv(5e17, volume, reactor.reserve(), Math.Rounding.Ceil);
     }
 
     function _prepare(address deployer) internal {
