@@ -157,7 +157,8 @@ stopped updating permanently, a freshness timeout could preserve redemptions
 indefinitely. Gluon accepts the risk of stale pricing rather than adding this
 age-based restriction. Other operation checks still apply.
 
-If an oracle read reverts, the reactor uses its last successfully cached price.
+If an oracle read reverts or returns less than 32 bytes, the reactor uses its last
+successfully cached price.
 Nonzero prices are cached by state-changing operations only when the whole operation
 completes; view calls do not update the cache. This fallback supports oracles through
 the shared `IOracle` interface and does not depend on Chainlink round metadata.
