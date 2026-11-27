@@ -1590,7 +1590,7 @@ contract GluonIntegrationTest is Test {
         assertEq(reactor.reserveRatioPeggedAsset(), ratioBefore, "reverted beta+ must leave reserve ratio unchanged");
     }
 
-    function testBetaMinusMayCrossAboveUpperReserveRatio() public {
+    function testBetaMinusCannotCrossAboveUpperReserveRatio() public {
         address user = makeAddr("betaMinusUpperCrossUser");
 
         _fundAndFission(user, 100e18);
@@ -1600,22 +1600,12 @@ contract GluonIntegrationTest is Test {
         assertGe(ratioBefore, reactor.CRITICAL_RESERVE_RATIO(), "precondition: beta- must start inside operating range");
         assertLe(ratioBefore, reactor.UPPER_RESERVE_RATIO(), "precondition: beta- must start inside operating range");
 
+        // This conversion would move the ratio from about 150% to about 214%.
         vm.prank(user);
+        vm.expectRevert(StableCoinReactor.ResultingReserveRatioAboveUpper.selector);
         reactor.transmuteNeutronToProton(40e18, 0, user);
 
-        uint256 ratioAfter = reactor.reserveRatioPeggedAsset();
-
-        assertGt(
-            ratioAfter, reactor.UPPER_RESERVE_RATIO(), "beta- should be allowed to move resulting ratio above 200%"
-        );
-
-        // Once outside the range, later normal operations are disabled.
-        bytes memory expectedError =
-            abi.encodeWithSelector(StableCoinReactor.ReserveRatioOutOfRange.selector, ratioAfter);
-
-        vm.prank(user);
-        vm.expectRevert(expectedError);
-        reactor.fusion(1e18, user);
+        assertEq(reactor.reserveRatioPeggedAsset(), ratioBefore, "reverted beta- must leave reserve ratio unchanged");
     }
 
     function testAdjustPegIncreasesPegFactorAboveUpperBound() public {

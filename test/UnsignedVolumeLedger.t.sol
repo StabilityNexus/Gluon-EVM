@@ -21,7 +21,8 @@ contract BetaFeeHarness is StableCoinReactor {
 
 contract UnsignedVolumeLedgerTest is Test {
     uint256 private constant WAD = 1e18;
-    uint256 private constant FIRST_TRADE = 38 * 1e75;
+    uint256 private constant FIRST_TRADE = 16 * 1e75;
+    uint256 private constant PLUS_TRADE = 45 * 1e75;
     bytes32 private constant PLUS =
         keccak256("TransmutePlus(address,address,uint256,uint256,uint256,uint256,uint256,uint256)");
     bytes32 private constant MINUS =
@@ -184,23 +185,28 @@ contract UnsignedVolumeLedgerTest is Test {
         _assertVolumes(PLUS, WAD + gross, WAD);
     }
 
-    function _prepareSignedBoundary() private {
+    // Beta-minus may not end above 200%. At an oracle price of 1 one Neutron is worth exactly one
+    // base unit, so beta-minus volume equals the amount. A beta-plus in between lowers the ratio
+    // again so the final beta-minus can bring the minus counter to the former signed boundary.
+    function _prepareSignedBoundary() private returns (uint256 plusVolume) {
         reactor = _deploy(1, WAD, WAD / 2, 1e77);
         vm.prank(user);
         reactor.transmuteNeutronToProton(FIRST_TRADE, 0, user);
-        oracle.setValue(WAD / 2);
-        assertEq(reactor.neutronPriceInBase(), 2 * WAD);
+
+        plusVolume = Math.mulDiv(PLUS_TRADE, reactor.protonPriceInBase(), WAD);
+        vm.prank(user);
+        reactor.transmuteProtonToNeutron(PLUS_TRADE, 0, user);
+        assertEq(reactor.neutronPriceInBase(), WAD);
     }
 
     function testFormerSignedMinimumSupportsFurtherFeesDecayAndFusion() public {
-        _prepareSignedBoundary();
-        uint256 secondTrade = ((uint256(1) << 255) - FIRST_TRADE) / 2;
+        uint256 plusVolume = _prepareSignedBoundary();
+        uint256 secondTrade = (uint256(1) << 255) - FIRST_TRADE;
         vm.recordLogs();
         vm.prank(user);
         reactor.transmuteNeutronToProton(secondTrade, 0, user);
-        _assertVolumes(MINUS, 0, uint256(1) << 255);
+        _assertVolumes(MINUS, plusVolume, uint256(1) << 255);
 
-        oracle.setValue(3e17);
         vm.warp(block.timestamp + 1);
         uint256 gross = Math.mulDiv(WAD, reactor.neutronPriceInBase(), WAD);
         vm.recordLogs();
@@ -208,7 +214,7 @@ contract UnsignedVolumeLedgerTest is Test {
         (uint256 output, uint256 fee) = reactor.transmuteNeutronToProton(WAD, 0, user);
         assertGt(output, 0);
         assertGt(fee, 0);
-        _assertVolumes(MINUS, 0, (uint256(1) << 254) + gross);
+        _assertVolumes(MINUS, plusVolume / 2, (uint256(1) << 254) + gross);
 
         uint256 beforeBalance = base.balanceOf(user);
         vm.prank(user);
@@ -217,12 +223,12 @@ contract UnsignedVolumeLedgerTest is Test {
     }
 
     function testVolumeCanCrossFormerSignedBoundary() public {
-        _prepareSignedBoundary();
-        uint256 secondTrade = ((uint256(1) << 255) - FIRST_TRADE) / 2 + 1;
+        uint256 plusVolume = _prepareSignedBoundary();
+        uint256 secondTrade = (uint256(1) << 255) - FIRST_TRADE + 2;
         vm.recordLogs();
         vm.prank(user);
         reactor.transmuteNeutronToProton(secondTrade, 0, user);
-        _assertVolumes(MINUS, 0, (uint256(1) << 255) + 2);
+        _assertVolumes(MINUS, plusVolume, (uint256(1) << 255) + 2);
     }
 
     function testUnsignedCounterOverflowStillRollsBackTrade() public {
