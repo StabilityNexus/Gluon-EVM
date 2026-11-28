@@ -446,7 +446,7 @@ contract StableCoinReactor is ReentrancyGuard {
         uint256 received = reserve() - reserveBaseline;
 
         (uint256 netAmount, uint256 fee, uint256 devFeeAmount) = _deductFees(received, FISSION_FEE);
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
+        devFeeAmount = _payDevFee(devFeeAmount);
 
         // Accounting boundary. Every reserve amount below is in the protocol representation;
         // The event reports received funds, retained protocol fees and dev fees in native units.
@@ -494,7 +494,7 @@ contract StableCoinReactor is ReentrancyGuard {
         (uint256 net, uint256 fee, uint256 devFeeAmount) = _deductFees(m, FUSION_FEE);
 
         BASE_TOKEN.safeTransfer(to, net);
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
+        devFeeAmount = _payDevFee(devFeeAmount);
         emit Fusion(msg.sender, to, nBurn, pBurn, net, fee, devFeeAmount);
     }
 
@@ -508,6 +508,13 @@ contract StableCoinReactor is ReentrancyGuard {
         net = Math.mulDiv(amount, WAD - feeWad - devFee, WAD);
         devFeeAmount = Math.mulDiv(amount, devFee, WAD);
         feeAmount = amount - net - devFeeAmount;
+    }
+
+    // A refused dev fee transfer (for example a blacklisted receiver) must not block user operations.
+    // The fee then stays in the reserve and the event reports 0.
+    function _payDevFee(uint256 amount) internal returns (uint256) {
+        if (amount == 0 || !BASE_TOKEN.trySafeTransfer(devFeeReceiver, amount)) return 0;
+        return amount;
     }
 
     function _rpow(uint256 x, uint256 n) internal pure returns (uint256 z) {
@@ -595,7 +602,7 @@ contract StableCoinReactor is ReentrancyGuard {
         neutronOut = Math.mulDiv(netBase, WAD, neutronPriceBase);
         if (neutronOut < minNeutronOut) revert ExcessiveSlippage();
 
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
+        devFeeAmount = _payDevFee(devFeeAmount);
         uint256 resultingNeutronSupply = neutronSupplyCached + neutronOut;
         uint256 resultingReserveRatio = _reserveRatioWad(_normalizedReserve(), resultingNeutronSupply, basePrice);
         if (resultingReserveRatio < CRITICAL_RESERVE_RATIO) {
@@ -664,7 +671,7 @@ contract StableCoinReactor is ReentrancyGuard {
         NEUTRON_TOKEN.burn(msg.sender, neutronIn);
         PROTON_TOKEN.mint(to, protonOut);
         decayedVolumeMinusBase = newVolume;
-        if (devFeeAmount > 0) BASE_TOKEN.safeTransfer(devFeeReceiver, devFeeAmount);
+        devFeeAmount = _payDevFee(devFeeAmount);
 
         emit TransmuteMinus(
             msg.sender, to, neutronIn, protonOut, feeWad, decayedVolumePlusBase, newVolume, devFeeAmount
